@@ -123,8 +123,7 @@ def main():
     current_year = datetime.date.today().year
 
     print("[*] Loading Natural Earth admin-0 boundaries...")
-    world = gpd.read_file(NE_URL)
-    world = world[world["CONTINENT"] != "Antarctica"].copy()
+    world = gpd.read_file(NE_URL).copy()
     world["iso3"] = world.apply(resolve_iso3, axis=1)
 
     print("[*] Fetching official statistics from the World Bank...")

@@ -141,7 +141,10 @@
 
   const svg = d3.select("#map");
   const zoomLayer = svg.append("g").attr("class", "zoom-layer");
+  const sphere = zoomLayer.append("path").attr("class", "sphere");
+  const graticule = zoomLayer.append("path").attr("class", "graticule");
   const countriesLayer = zoomLayer.append("g").attr("class", "countries-layer");
+  const graticuleLines = d3.geoGraticule()();
   const tooltip = d3.select("#tooltip");
   const mapWrap = document.querySelector(".map-wrap");
 
@@ -199,6 +202,8 @@
   function render(t) {
     const projection = buildProjection(t);
     currentPath = d3.geoPath(projection);
+    sphere.attr("d", currentPath({ type: "Sphere" }));
+    graticule.attr("d", currentPath(graticuleLines));
     countriesLayer.selectAll("path.country").attr("d", currentPath);
     blendReadout.textContent = `${Math.round(t * 100)}% Equal Earth`;
   }

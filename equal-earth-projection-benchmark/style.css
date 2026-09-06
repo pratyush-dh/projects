@@ -13,6 +13,8 @@
   --country-fill: #e1e0d9;
   --country-stroke: #fcfcfb;
   --selected-stroke: #eb6834;
+  --ocean: #eef4f8;
+  --graticule: #c7d6df;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -31,6 +33,8 @@
     --country-fill: #2c2c2a;
     --country-stroke: #1a1a19;
     --selected-stroke: #d95926;
+    --ocean: #0f1b24;
+    --graticule: #24333c;
   }
 }
 
@@ -49,6 +53,8 @@
   --country-fill: #2c2c2a;
   --country-stroke: #1a1a19;
   --selected-stroke: #d95926;
+  --ocean: #0f1b24;
+  --graticule: #24333c;
 }
 
 * {
@@ -188,6 +194,17 @@ header p {
   width: 100%;
   height: auto;
   display: block;
+}
+
+.sphere {
+  fill: var(--ocean);
+  stroke: none;
+}
+
+.graticule {
+  fill: none;
+  stroke: var(--graticule);
+  stroke-width: 0.6px;
 }
 
 .country {
