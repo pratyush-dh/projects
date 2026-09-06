@@ -30,7 +30,10 @@
     <div class="controls">
       <div class="control-group">
         <label for="search">Search a country</label>
-        <input id="search" type="text" list="country-list" placeholder="e.g. Greenland, Brazil, Russia" autocomplete="off" />
+        <div class="search-row">
+          <input id="search" type="text" list="country-list" placeholder="e.g. Greenland, Brazil, Russia" autocomplete="off" />
+          <button type="button" id="clear-selection" class="clear-selection-btn" hidden>Clear selection</button>
+        </div>
         <datalist id="country-list"></datalist>
       </div>
 

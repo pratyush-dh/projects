@@ -152,6 +152,7 @@
   const blendReadout = document.getElementById("blend-readout");
   const searchInput = document.getElementById("search");
   const countryList = document.getElementById("country-list");
+  const clearSelectionBtn = document.getElementById("clear-selection");
   const modalBackdrop = document.getElementById("modal-backdrop");
   const yearInput = document.getElementById("year");
   const yearReadout = document.getElementById("year-readout");
@@ -510,7 +511,16 @@
     selectedFeature = feature;
     countriesLayer.selectAll("path.country").classed("selected", (d) => d === feature);
     countriesLayer.selectAll("path.country.selected").raise();
+    clearSelectionBtn.hidden = false;
     openModal(feature);
+  }
+
+  function clearSelection() {
+    selectedFeature = null;
+    countriesLayer.selectAll("path.country").classed("selected", false);
+    clearSelectionBtn.hidden = true;
+    searchInput.value = "";
+    closeModal();
   }
 
   function findCountryByName(query) {
@@ -531,6 +541,8 @@
     document.addEventListener("keydown", (evt) => {
       if (evt.key === "Escape" && !modalBackdrop.hidden) closeModal();
     });
+
+    clearSelectionBtn.addEventListener("click", clearSelection);
 
     searchInput.addEventListener("change", () => {
       const feature = findCountryByName(searchInput.value);
