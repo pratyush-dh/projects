@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Equal Earth vs. Web Mercator — Interactive Projection Explorer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>Web Mercator vs. Equal Earth</h1>
+      <p>
+        Pick a layer, then drag the year scrubber (or hit play) to watch it evolve on
+        the map itself. Drag the projection slider to morph between the standard
+        <strong>Web Mercator</strong> projection and the UN-endorsed, equal-area
+        <strong>Equal Earth</strong> projection. Search or click a country to open a
+        side-by-side comparison of its rendered size under each projection, alongside
+        its official stats and world rank.
+      </p>
+    </header>
+
+    <div class="layer-tabs" id="layer-tabs">
+      <button type="button" class="layer-tab active" data-layer="population">Population density</button>
+      <button type="button" class="layer-tab" data-layer="forest">Forest cover</button>
+      <button type="button" class="layer-tab" data-layer="co2">CO₂ emissions</button>
+      <button type="button" class="layer-tab" data-layer="urban">Urbanization</button>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label for="search">Search a country</label>
+        <input id="search" type="text" list="country-list" placeholder="e.g. Greenland, Brazil, Russia" autocomplete="off" />
+        <datalist id="country-list"></datalist>
+      </div>
+
+      <div class="control-group slider-group">
+        <label for="blend">Projection blend</label>
+        <div class="slider-endpoints">
+          <span>Web Mercator</span>
+          <span>Equal Earth</span>
+        </div>
+        <input id="blend" type="range" min="0" max="1" step="0.001" value="0" />
+        <div class="blend-readout" id="blend-readout">0% Equal Earth</div>
+      </div>
+    </div>
+
+    <div class="map-wrap">
+      <svg id="map" viewBox="0 0 960 520" preserveAspectRatio="xMidYMid meet"></svg>
+      <div class="legend" id="legend">
+        <div class="legend-title" id="legend-title">Population density (people / km²)</div>
+      </div>
+      <div class="tooltip" id="tooltip"></div>
+    </div>
+
+    <div class="timeline">
+      <button id="play-btn" class="play-btn" type="button" aria-label="Play">▶</button>
+      <input id="year" type="range" min="1960" max="2025" step="1" value="2025" />
+      <div class="year-readout" id="year-readout">2025</div>
+    </div>
+
+    <section class="trend-section">
+      <div class="trend-header">
+        <h2 id="global-trend-title">Global population, 1960–present</h2>
+        <div class="trend-readout" id="global-trend-readout"></div>
+      </div>
+      <div class="chart-wrap">
+        <svg class="chart-svg" id="global-trend-chart" viewBox="0 0 900 220" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="chart-tooltip" id="global-trend-tooltip"></div>
+      </div>
+      <div class="trend-note">Source: World Bank Open Data. Refreshed periodically — see <code>data/world.json</code> generation timestamp.</div>
+    </section>
+
+    <footer>
+      Boundaries: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a> (1:110m, admin-0 countries).
+      Population, area, forest cover, CO₂ emissions &amp; urbanization: <a href="https://data.worldbank.org/" target="_blank" rel="noopener">World Bank Open Data</a> (sourced in turn from UN World Population Prospects, FAO, EDGAR/JRC + IEA, and UN World Urbanization Prospects — most recent year available per country).
+      Data refresh: <span id="data-generated">—</span>.
+    </footer>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-header">
+        <h2 id="modal-title">—</h2>
+        <button class="modal-close" id="modal-close" type="button" aria-label="Close">✕</button>
+      </div>
+
+      <div class="modal-panels">
+        <div class="modal-panel">
+          <svg class="modal-svg" id="modal-svg-mercator" viewBox="0 0 300 300"></svg>
+          <div class="modal-panel-label">Web Mercator</div>
+          <div class="modal-panel-stat" id="modal-stat-mercator">—</div>
+        </div>
+        <div class="modal-panel">
+          <svg class="modal-svg" id="modal-svg-equalearth" viewBox="0 0 300 300"></svg>
+          <div class="modal-panel-label">Equal Earth</div>
+          <div class="modal-panel-stat" id="modal-stat-equalearth">—</div>
+        </div>
+      </div>
+
+      <div class="modal-stats-grid">
+        <div class="stat-tile">
+          <div class="stat-label">Population</div>
+          <div class="stat-value" id="stat-population">—</div>
+          <div class="stat-sub" id="stat-population-rank">—</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Area</div>
+          <div class="stat-value" id="stat-area">—</div>
+          <div class="stat-sub" id="stat-area-rank">—</div>
+        </div>
+        <div class="stat-tile">
+          <div class="stat-label">Population density</div>
+          <div class="stat-value" id="stat-density">—</div>
+          <div class="stat-sub" id="stat-density-rank">—</div>
+        </div>
+        <div class="stat-tile" id="stat-layer-tile" hidden>
+          <div class="stat-label" id="stat-layer-label">—</div>
+          <div class="stat-value" id="stat-layer-value">—</div>
+          <div class="stat-sub" id="stat-layer-rank">—</div>
+        </div>
+      </div>
+      <div class="trend-header modal-trend-header">
+        <h3 id="modal-trend-title">Population, 1960–present</h3>
+        <div class="trend-readout" id="modal-trend-readout"></div>
+      </div>
+      <div class="chart-wrap">
+        <svg class="chart-svg" id="modal-trend-chart" viewBox="0 0 560 160" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="chart-tooltip" id="modal-trend-tooltip"></div>
+      </div>
+
+      <div class="modal-source-note">Stats: World Bank Open Data. Comparison panels above use map-rendered geometry, so shapes may differ slightly from official survey figures.</div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
