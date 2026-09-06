@@ -509,6 +509,7 @@
   function selectCountry(feature) {
     selectedFeature = feature;
     countriesLayer.selectAll("path.country").classed("selected", (d) => d === feature);
+    countriesLayer.selectAll("path.country.selected").raise();
     openModal(feature);
   }
 

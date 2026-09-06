@@ -217,7 +217,8 @@ header p {
 
 .country.selected {
   stroke: var(--selected-stroke);
-  stroke-width: 1.6px;
+  stroke-width: 3.5px;
+  filter: drop-shadow(0 0 3px rgba(0, 0, 0, 0.45));
 }
 
 .country:hover {
@@ -254,6 +255,27 @@ header p {
   height: 12px;
   border-radius: 2px;
   flex: none;
+}
+
+@media (max-width: 640px) {
+  .legend {
+    position: static;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 3px 12px;
+    margin-top: 8px;
+    max-width: none;
+  }
+
+  .legend-title {
+    flex-basis: 100%;
+    margin-bottom: 2px;
+  }
+
+  .legend-row {
+    margin-top: 0;
+  }
 }
 
 .timeline {
