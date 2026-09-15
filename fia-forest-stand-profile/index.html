@@ -926,17 +926,27 @@ function zoomTransformForBounds(bounds) {
   return d3.zoomIdentity.translate(tx, ty).scale(scale);
 }
 
+let currentPartnerFipsSet = null;
+
+function fipsSetFromRows(rows) {
+  return new Set(rows.map(r => r.county_fips));
+}
+
 function enterCountyMode(state) {
   const fips = STATE_FIPS[state];
   if (!fips) return;
   countyModeState = state;
   document.getElementById("backToUsBtn").hidden = false;
 
-  Promise.all([getCountyTopo(), getCountyData(state)])
-    .then(([topo, rows]) => {
+  const partner = SPLIT_PARTNER[state];
+  const partnerPromise = partner ? getCountyData(partner) : Promise.resolve(null);
+
+  Promise.all([getCountyTopo(), getCountyData(state), partnerPromise])
+    .then(([topo, rows, partnerRows]) => {
       if (countyModeState !== state) return; // superseded by another selection while loading
       if (!countyFeaturesCache) countyFeaturesCache = topojson.feature(topo, topo.objects.counties).features;
       const features = countyFeaturesCache.filter(d => String(d.id).slice(0, 2) === fips);
+      currentPartnerFipsSet = partnerRows ? fipsSetFromRows(partnerRows) : null;
 
       const stateFeature = stateFeatures.find(d => d.id === fips);
       if (stateFeature) {
@@ -966,6 +976,7 @@ function refreshCountyView() {
 
 function exitCountyMode() {
   countyModeState = null;
+  currentPartnerFipsSet = null;
   countyG.selectAll("path.county-shape").remove();
   statesSel.style("opacity", 1);
   document.getElementById("backToUsBtn").hidden = true;
@@ -1003,7 +1014,19 @@ function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
       d3.select(this).classed("hover", true);
       const t = byFips[d.id];
       const name = t ? t.county_name : (d.properties && d.properties.name) || d.id;
-      showTip(event, tooltipNode(name + " County", t ? (fmtPrecise(t.estimate, metricKey, viewMode) + " " + unitFor(metricKey, viewMode)) : "No data", info.title));
+      let valueText, subText;
+      if (t) {
+        valueText = fmtPrecise(t.estimate, metricKey, viewMode) + " " + unitFor(metricKey, viewMode);
+        subText = info.title;
+      } else if (currentPartnerFipsSet && currentPartnerFipsSet.has(d.id)) {
+        const partner = SPLIT_PARTNER[state];
+        valueText = "In the " + STATE_META[partner].name;
+        subText = "Different survey vintage — switch state to see it";
+      } else {
+        valueText = "No FIA plots sampled";
+        subText = "Small or heavily urbanized area — not a gap in the pull";
+      }
+      showTip(event, tooltipNode(name + " County", valueText, subText));
     })
     .on("pointerleave", function() { d3.select(this).classed("hover", false); hideTip(); });
 
@@ -1139,7 +1162,8 @@ function renderFooter() {
     "Grouping: rselected = \"Stand-size class\". Metrics (snum): volume 11287 · biomass 10 · growth 11303 · removals 11305 · mortality 11304 · sawlog 20 · area 2.",
     "Map: US state and county boundaries via us-atlas (public domain, US Census TIGER derivative), Albers equal-area composite projection. County-level figures cross-tab the same rselected=\"Stand-size class\" query against cselected=\"County code and name\" — one live query per state returns every county at once.",
     "\"Per acre of whole state\" uses each state's total land area (US Census reference figures, land only, excludes water) — a coarse denominator, not FIA data.",
-    "Sampling error (SE) reflects FIA's stratified design; classes with few plots carry wide SE — see the table before treating a bar as precise."
+    "Sampling error (SE) reflects FIA's stratified design; classes with few plots carry wide SE — see the table before treating a bar as precise.",
+    "County map \"no data\" holes have two distinct causes, both shown on hover: a county in Texas or Alaska's OTHER survey unit (a different vintage, not summed here — see the banner above when one of those states is selected), or a small/heavily urbanized county (e.g. Virginia's independent cities) where FIA's systematic plot grid places zero plots — a real absence of sampled forest, not a gap in this pull."
   ];
   lines.forEach(t => { const d = document.createElement("div"); d.textContent = t; foot.appendChild(d); });
 }
