@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Interactive US forest inventory explorer built on live USDA FIADB-API data: volume, biomass, growth, mortality, removals, sawlog stock, forest area, and inventory currency by stand-size class, state and county level, with a zoomable choropleth map and custom CSV export.">
+<meta name="description" content="Interactive US forest inventory explorer built on live USDA FIADB-API data: volume, biomass, growth, mortality, removals, sawlog stock, forest area, and inventory currency by stand-size class, state and county level, with a zoomable choropleth map, export preview, and custom CSV builder.">
 <title>Forest Stand Profile</title>
 <script>
   // Applied synchronously, before CSS paints, so a returning visitor's saved
@@ -268,7 +268,20 @@
   .export-checklist-states { max-height: 220px; }
   .export-checklist label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
   .export-checklist input { margin: 0; cursor: pointer; }
-  .export-status { font-size: 12px; color: var(--text-muted); align-self: center; } { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); border-top: 1px solid var(--gridline); padding-top: 16px; }
+  .export-status { font-size: 12px; color: var(--text-muted); align-self: center; }
+
+  /* ---------- export preview modal ---------- */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(11,11,11,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-box { background: var(--surface-card); border-radius: 12px; width: min(1040px, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); flex: none; }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--text-muted); padding: 0 4px; }
+  .modal-close:hover { color: var(--text-primary); }
+  .modal-body { padding: 18px; overflow: auto; background: #ecece8; display: flex; justify-content: center; flex: 1 1 auto; min-height: 0; }
+  .modal-body svg { max-width: 100%; height: auto; background: #ffffff; box-shadow: 0 1px 6px rgba(0,0,0,0.18); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); flex: none; }
+
+  footer.provenance { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); border-top: 1px solid var(--gridline); padding-top: 16px; }
 </style>
 </head>
 <body>
@@ -431,6 +444,20 @@
 
 <div class="tooltip" id="tooltip"></div>
 <div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="exportPreviewOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Map export preview</div>
+      <button type="button" class="modal-close" id="exportPreviewClose" aria-label="Close preview">&times;</button>
+    </div>
+    <div class="modal-body" id="exportPreviewBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="exportPreviewCancel" type="button">Cancel</button>
+      <button class="btn" id="exportPreviewConfirm" type="button">&#8681; Download SVG</button>
+    </div>
+  </div>
+</div>
 
 <script>
 /* ---------------- data ---------------- */
@@ -1068,13 +1095,37 @@ function buildMapExportSvg() {
   return out;
 }
 
-document.getElementById("downloadMapBtn").addEventListener("click", () => {
+// "Download map (SVG)" opens a preview of the exact annotated file first --
+// title, legend, and caveat text baked in -- rather than saving blind.
+let pendingExportSvg = null;
+function openMapPreview() {
+  pendingExportSvg = buildMapExportSvg();
+  const body = document.getElementById("exportPreviewBody");
+  body.innerHTML = "";
+  body.appendChild(pendingExportSvg.cloneNode(true));
+  document.getElementById("exportPreviewOverlay").hidden = false;
+}
+function closeMapPreview() {
+  document.getElementById("exportPreviewOverlay").hidden = true;
+  pendingExportSvg = null;
+}
+document.getElementById("downloadMapBtn").addEventListener("click", openMapPreview);
+document.getElementById("exportPreviewClose").addEventListener("click", closeMapPreview);
+document.getElementById("exportPreviewCancel").addEventListener("click", closeMapPreview);
+document.getElementById("exportPreviewOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "exportPreviewOverlay") closeMapPreview();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !document.getElementById("exportPreviewOverlay").hidden) closeMapPreview();
+});
+document.getElementById("exportPreviewConfirm").addEventListener("click", () => {
+  if (!pendingExportSvg) return;
   const metric = metricSel.value;
   const stateSuffix = countyModeState ? "_" + countyModeState.replace(/\s+/g, "_") : "";
-  const out = buildMapExportSvg();
   const serializer = new XMLSerializer();
-  const src = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(out);
+  const src = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(pendingExportSvg);
   saveFile("fia_map_" + metric + stateSuffix + ".svg", src, "image/svg+xml");
+  closeMapPreview();
 });
 
 // Two color-scale/legend styles share the map and county-map renderers:
@@ -1259,7 +1310,12 @@ function enterCountyMode(state) {
       if (stateFeature) {
         mapSvg.transition().duration(500).call(mapZoom.transform, zoomTransformForBounds(geoPathGen.bounds(stateFeature)));
       }
-      statesSel.style("opacity", d => (d.id === fips ? 0 : 1));
+      // The focal state disappears entirely (its counties paint over it);
+      // every other state fades to a low-opacity backdrop rather than
+      // staying at full national-map intensity, so the zoomed county
+      // symbology reads as the actual subject -- on screen and in the
+      // exported SVG, which just clones this same DOM state.
+      statesSel.style("opacity", d => (d.id === fips ? 0 : 0.16));
 
       renderCountyLayer(state, features, rows, metricSel.value, currentView());
       renderCountyTable(state, rows, metricSel.value, currentView());

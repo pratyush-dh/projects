@@ -32,11 +32,14 @@ each state's centroid on the national map.
 **"View / export data"** opens a custom export builder: pick any combination
 of states and metrics, at state or county level, and download one combined
 CSV — the multi-state, multi-variable pull EVALIDator makes you do one query
-at a time and stitch together by hand. **"Download map (SVG)"** exports the
-map as a self-contained, annotated file — title, description, legend, and a
-source line baked in as real SVG shapes/text (not just the bare shapes), at
-whatever pan/zoom the map is currently at, so it reads on its own dropped
-into a report or a slide.
+at a time and stitch together by hand. **"Download map (SVG)"** opens a
+preview of the exact file before saving anything — title, description,
+legend, and a source line baked in as real SVG shapes/text (not just the
+bare shapes), at whatever pan/zoom the map is currently at, so it reads on
+its own dropped into a report or a slide. While zoomed into a county view,
+every other state fades to a low-opacity backdrop instead of staying at full
+national-map intensity, so the county symbology reads as the actual subject
+— on screen and in the export, which just clones that same view.
 
 ## Why this exists
 
