@@ -24,6 +24,16 @@ poletimber → sawtimber, plus nonstocked) — FIA's classification of a stand's
 successional stage — so you can see not just how much wood a state holds, but
 whether it's locked up in young regenerating stands or old mature ones.
 
+**This is a one-time snapshot, not a live feed.** The queries described above
+were run once, on 2026-09-14, and their results are baked into `index.html`
+and the `county_json/`/`data/` files below — the published page has no way to
+call the live FIADB-API itself (a static GitHub Pages site can't run the
+Python client), so it can't refresh on its own. Every FIA evaluation on
+record gets updated on its own schedule (see "Current inventory" per state in
+the app), so figures here will drift from EVALIDator's live numbers as newer
+evaluations post. To get a fresher pull, re-run the pipeline below — nothing
+about the process is a one-off; every step is a checked-in script.
+
 Light/dark theme toggle top-right; typeface is Source Sans (Google Fonts'
 maintained successor to Source Sans Pro), matching the typeface FIADB-API's
 own pages ship (`static/css/index.css`). State postal-code labels sit at
@@ -102,6 +112,17 @@ result on one map.
   one state, each county row keeps its own `report_years` rather than
   asserting one figure for the whole state — the app surfaces this via a
   caveat banner and per-county hover text whenever TX or AK is selected.
+- **Even after merging, growth/removals/mortality still show "No data" for
+  most Texas and Alaska counties — this is a real limit of the source data,
+  not a leftover merge bug.** Those three metrics require growth-accounting,
+  which needs a plot to have been *remeasured* (visited more than once).
+  Checking the pre-merge data directly: Texas-West's growth rows cover
+  exactly the same 43 counties as Texas-East (at older, lower values) — the
+  other 203 counties never had a remeasured plot in either vintage, so
+  there's no fallback value to merge in. Volume, biomass, sawlog, and area
+  don't need remeasurement and cover nearly the whole state in both. The app
+  shows a metric-aware caveat explaining this whenever growth, removals, or
+  mortality is selected for TX or AK.
 - The county FIPS parser has a fix baked in for a related but separate API
   quirk: for the 7 states whose FIPS code starts with `0` (AL, AK, AZ, AR,
   CA, CO, CT), the site's own display drops the leading zero from the county
