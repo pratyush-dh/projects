@@ -1020,6 +1020,56 @@ function highlightMapState(state) {
   statesSel.classed("selected", d => FIPS_TO_LABEL[d.id] === state);
 }
 
+// This map's national layout is an Albers-USA-style composite: the
+// contiguous states, Alaska, and Hawaii are each their own independently
+// scaled and positioned Albers projection, not one continuous map (Alaska in
+// particular renders far smaller on screen than its true size relative to
+// the rest of the country -- a well-known property of this composite, not a
+// mistake). A single scale bar for the whole image would silently misstate
+// distance in two of the three pieces. Since Albers is an *equal-area*
+// projection, though, the ratio of on-screen pixels² to real-world square
+// miles is exactly recoverable, per piece, from data this page already has
+// (STATE_LAND_ACRES) -- no need to reverse-engineer the composite's internal
+// projection parameters at all.
+const SQMI_PER_ACRE = 1 / 640;
+let pxPerMileCache = null;
+function pxPerMileByRegion() {
+  if (pxPerMileCache) return pxPerMileCache;
+  const byFips = {}; stateFeatures.forEach(f => { byFips[f.id] = f; });
+  function calibrate(labels) {
+    let pxArea = 0, sqMi = 0;
+    labels.forEach(l => {
+      const feature = byFips[STATE_FIPS[l]];
+      if (!feature) return;
+      pxArea += Math.abs(geoPathGen.area(feature));
+      sqMi += (STATE_LAND_ACRES[l] || 0) * SQMI_PER_ACRE;
+    });
+    return sqMi > 0 ? Math.sqrt(pxArea / sqMi) : null;
+  }
+  const contiguousLabels = Object.keys(STATE_META).filter(l => l !== "US" && l !== "AK" && l !== "HI");
+  pxPerMileCache = { contiguous: calibrate(contiguousLabels), AK: calibrate(["AK"]), HI: calibrate(["HI"]) };
+  return pxPerMileCache;
+}
+function regionForState(state) { return state === "AK" || state === "HI" ? state : "contiguous"; }
+
+// A conventional cartographic scale bar: ticked ends, a round-number
+// distance chosen to land near targetPx wide (never wider), so it reads at a
+// glance instead of forcing the reader to do arithmetic on an odd number.
+const NICE_MILES = [1,2,5,10,20,25,50,100,200,250,500,1000,1500,2000,3000,5000,10000];
+function buildScaleBar(pxPerMile, x, y, label, targetPx) {
+  if (!pxPerMile) return null;
+  let miles = NICE_MILES[0];
+  for (const m of NICE_MILES) { if (m * pxPerMile <= targetPx) miles = m; }
+  const barW = Math.max(miles * pxPerMile, 2);
+  const g = svgEl("g", {});
+  if (label) g.appendChild(svgEl("text", { x: x + barW / 2, y: y - 15, "font-size": 8.5, "text-anchor": "middle", fill: EXPORT_INK.muted }, label));
+  g.appendChild(svgEl("rect", { x, y: y - 5, width: barW, height: 3, fill: EXPORT_INK.ink }));
+  g.appendChild(svgEl("line", { x1: x, x2: x, y1: y - 9, y2: y, stroke: EXPORT_INK.ink, "stroke-width": 1 }));
+  g.appendChild(svgEl("line", { x1: x + barW, x2: x + barW, y1: y - 9, y2: y, stroke: EXPORT_INK.ink, "stroke-width": 1 }));
+  g.appendChild(svgEl("text", { x: x + barW / 2, y: y + 11, "font-size": 9, "text-anchor": "middle", fill: EXPORT_INK.secondary }, miles + " mi"));
+  return g;
+}
+
 document.getElementById("resetZoomBtn").addEventListener("click", () => {
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
 });
@@ -1071,7 +1121,7 @@ function buildMapExportSvg() {
   const caveatH = caveatLines.length * 15;
   const headerH = (caveatStartY + caveatH + 14) - pad;
   const legendH = 44;
-  const footerH = 26;
+  const footerH = 40;
   const totalW = mapW + pad * 2;
   const totalH = pad + headerH + mapH + legendH + footerH + pad;
 
@@ -1116,6 +1166,51 @@ function buildMapExportSvg() {
   const contentWrap = svgEl("g", { "clip-path": "url(#export-clip)" });
   contentWrap.appendChild(zoomG);
   mapGroup.appendChild(contentWrap);
+
+  // --- scale bar(s) -- one per independently-scaled composite piece that's
+  // actually in view, at the map's current pan/zoom ---
+  const zt = d3.zoomTransform(mapSvg.node());
+  const pxPerMile = pxPerMileByRegion();
+  function screenBounds(features) {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    features.forEach(f => {
+      const b = geoPathGen.bounds(f);
+      x0 = Math.min(x0, b[0][0]); y0 = Math.min(y0, b[0][1]);
+      x1 = Math.max(x1, b[1][0]); y1 = Math.max(y1, b[1][1]);
+    });
+    return [[zt.applyX(x0), zt.applyY(y0)], [zt.applyX(x1), zt.applyY(y1)]];
+  }
+  const byFipsForBounds = {}; stateFeatures.forEach(f => { byFipsForBounds[f.id] = f; });
+  const scaleBarsG = svgEl("g", {});
+  if (countyModeState) {
+    // Zoomed into one state's counties -- one bar, for whichever piece that
+    // state belongs to, at the current zoom (pan/zoom scales all pieces the
+    // same way once inside a single-piece county view).
+    const region = regionForState(countyModeState);
+    const effective = pxPerMile[region] ? pxPerMile[region] * zt.k : null;
+    const bar = buildScaleBar(effective, pad + 14, mapH - 14, null, 110);
+    if (bar) scaleBarsG.appendChild(bar);
+  } else {
+    // National view -- up to three bars, each placed just inside its own
+    // piece's on-screen bounds so it never gets confused for another's.
+    const contiguousLabels = Object.keys(STATE_META).filter(l => l !== "US" && l !== "AK" && l !== "HI");
+    const regions = [
+      { key: "contiguous", label: "Contiguous US", features: contiguousLabels.map(l => byFipsForBounds[STATE_FIPS[l]]).filter(Boolean), anchor: "bottom-right" },
+      { key: "AK", label: "Alaska", features: [byFipsForBounds[STATE_FIPS.AK]].filter(Boolean), anchor: "bottom-left" },
+      { key: "HI", label: "Hawaii", features: [byFipsForBounds[STATE_FIPS.HI]].filter(Boolean), anchor: "bottom-left" },
+    ];
+    regions.forEach(r => {
+      if (!r.features.length || !pxPerMile[r.key]) return;
+      const b = screenBounds(r.features);
+      const effective = pxPerMile[r.key] * zt.k;
+      const targetPx = r.key === "contiguous" ? 130 : 70;
+      const x = r.anchor === "bottom-right" ? Math.max(pad, b[1][0] - targetPx * 1.3) : Math.max(pad, b[0][0]);
+      const y = Math.min(mapH - 10, b[1][1] - 6);
+      const bar = buildScaleBar(effective, x, y, r.label, targetPx);
+      if (bar) scaleBarsG.appendChild(bar);
+    });
+  }
+  mapGroup.appendChild(scaleBarsG);
   out.appendChild(mapGroup);
 
   // --- legend, redrawn as plain SVG shapes from whichever renderer last ran ---
@@ -1146,9 +1241,11 @@ function buildMapExportSvg() {
   }
 
   // --- footer / source line ---
-  const footerY = totalH - pad + 4;
+  const footerY = totalH - pad - 10;
   const dateStr = new Date().toISOString().slice(0, 10);
   out.appendChild(svgEl("text", { x: pad, y: footerY, "font-size": 10.5, fill: EXPORT_INK.muted },
+    "CRS: Albers Equal-Area Conic (composite projection). Contiguous US, Alaska, and Hawaii are each projected independently, at different scales and not at their true relative position — use each region's own scale bar, not a single map scale."));
+  out.appendChild(svgEl("text", { x: pad, y: footerY + 14, "font-size": 10.5, fill: EXPORT_INK.muted },
     "Source: USDA Forest Service FIADB-API (fiadb-api/fullreport) · Forest Stand Profile · exported " + dateStr));
 
   return out;

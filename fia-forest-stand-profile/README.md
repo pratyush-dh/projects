@@ -44,11 +44,22 @@ of states and metrics, at state or county level, and download one combined
 CSV — the multi-state, multi-variable pull EVALIDator makes you do one query
 at a time and stitch together by hand. **"Download map (SVG)"** opens a
 preview of the exact file before saving anything — title, description,
-legend, and a source line baked in as real SVG shapes/text (not just the
-bare shapes), at whatever pan/zoom the map is currently at, so it reads on
-its own dropped into a report or a slide. While zoomed into a county view,
-every other state fades to a low-opacity backdrop instead of staying at full
-national-map intensity, so the county symbology reads as the actual subject
+legend, source line, and real cartographic scale bars, all baked in as real
+SVG shapes/text (not just the bare shapes), at whatever pan/zoom the map is
+currently at, so it reads on its own dropped into a report or a slide. The
+national map gets one scale bar per composite piece — contiguous US, Alaska,
+Hawaii — rather than one shared scale, since those three are independently
+scaled and positioned in the underlying Albers-USA-style composite (Alaska
+in particular renders far smaller on screen than its true relative size, a
+property of that composite, not a bug here); each bar's distance is derived
+straight from that region's own known land area
+(`STATE_LAND_ACRES`) against its on-screen area, which works exactly because
+Albers is an *equal-area* projection — no need to reverse-engineer the
+composite's internal projection parameters to get real distances out of it.
+A CRS line in the export's footer explains this. While zoomed into a county
+view, every other state fades to a low-opacity backdrop instead of staying
+at full national-map intensity, so the county symbology reads as the actual
+subject
 — on screen and in the export, which just clones that same view.
 
 ## Why this exists
