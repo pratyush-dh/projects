@@ -1536,8 +1536,8 @@ function renderCaveat(state, metric) {
       "Every county here uses the newest survey that covers it, falling back to an older one only where the newer survey doesn't reach — " +
       "so this total blends vintages rather than reflecting one single inventory year. Hover a county on the map below to see which years it's actually drawn from.");
 
-    if (hasGrm && (metric === "mortality" || metric === "growth" || metric === "removals")) {
-      lines.push("Most of the county map below will show \"No data\" for this metric: growth, removals, and mortality require plots visited more than once, and only a minority of " + STATE_META[state].name + "'s counties have that remeasurement history in either survey vintage — the rest were visited once, which is enough for volume, biomass, and area but not for a growth-accounting estimate.");
+    if (hasGrm && (metric === "mortality" || metric === "growth" || metric === "removals" || metric === "mortality_rate")) {
+      lines.push("Most of the county map below will show \"No data\" for this metric: growth, removals, and mortality (and the mortality rate computed from it) require plots visited more than once, and only a minority of " + STATE_META[state].name + "'s counties have that remeasurement history in either survey vintage — the rest were visited once, which is enough for volume, biomass, and area but not for a growth-accounting estimate.");
     }
   }
 
