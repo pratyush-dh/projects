@@ -333,6 +333,7 @@
     </div>
     <div class="btn-row">
       <button class="btn" id="backToUsBtn" type="button" hidden>&#8592; Back to US map</button>
+      <button class="btn" id="clearSelectionBtn" type="button" hidden>&#10005; Clear selection</button>
       <button class="btn" id="resetZoomBtn" type="button">&#8635; Reset zoom</button>
       <button class="btn" id="downloadMapBtn" type="button">&#8681; Download map (SVG)</button>
       <button class="btn" id="openExportBtn" type="button">&#128202; View / export data</button>
@@ -474,7 +475,8 @@ const STATE_META = {
   NM:{name:"New Mexico"}, NY:{name:"New York"}, NC:{name:"North Carolina"}, ND:{name:"North Dakota"}, OH:{name:"Ohio"},
   OK:{name:"Oklahoma"}, OR:{name:"Oregon"}, PA:{name:"Pennsylvania"}, RI:{name:"Rhode Island"}, SC:{name:"South Carolina"},
   SD:{name:"South Dakota"}, TN:{name:"Tennessee"}, TX:{name:"Texas"}, UT:{name:"Utah"}, VT:{name:"Vermont"},
-  VA:{name:"Virginia"}, WA:{name:"Washington"}, WV:{name:"West Virginia"}, WI:{name:"Wisconsin"}, WY:{name:"Wyoming"}
+  VA:{name:"Virginia"}, WA:{name:"Washington"}, WV:{name:"West Virginia"}, WI:{name:"Wisconsin"}, WY:{name:"Wyoming"},
+  US:{name:"United States"}
 };
 // FIPS (2-digit, as used by the topojson feature ids) <-> state label. One
 // entry each way now -- Texas and Alaska used to be split into overlapping
@@ -534,6 +536,11 @@ const SEQ_RAMPS = {
 // Split-region labels (AK-Coastal etc.) share their parent state's total acreage,
 // since the regional split of total land area isn't something FIA reports.
 const STATE_LAND_ACRES = {"AL":32412800,"AK":376576000,"AZ":72700160,"AR":33302400,"CA":99698560,"CO":66330880,"CT":3098880,"DE":1247360,"FL":34320000,"GA":36808320,"HI":4110720,"ID":52891520,"IL":35532160,"IN":22928640,"IA":35748480,"KS":52325760,"KY":25271040,"LA":27650560,"ME":19739520,"MD":6212480,"MA":4992000,"MI":36184960,"MN":50961280,"MS":30030720,"MO":43994880,"MT":93149440,"NE":49167360,"NV":70259840,"NH":5729920,"NJ":4706560,"NM":77630720,"NY":30160640,"NC":31115520,"ND":44160640,"OH":26150400,"OK":43900800,"OR":61432320,"PA":28635520,"RI":661760,"SC":19239040,"SD":48519040,"TN":26390400,"TX":167188480,"UT":52588800,"VT":5898880,"VA":25273600,"WA":42531840,"WV":15384320,"WI":34661120,"WY":62139520,"AK-Coastal":376576000,"AK-Interior":376576000,"TX-East":167188480,"TX-West":167188480};
+// National total = sum of each real state's own land area (the 50 real
+// postal-code keys above -- excludes the legacy split-region keys, which
+// would double-count TX and AK).
+STATE_LAND_ACRES.US = Object.keys(STATE_META).filter(l => l !== "US")
+  .reduce((a, l) => a + (STATE_LAND_ACRES[l] || 0), 0);
 
 /* ---------------- helpers ---------------- */
 function compact(n) {
@@ -579,7 +586,35 @@ function fmtPrecise(n, metricKey, viewMode) {
   if (viewMode && viewMode !== "total" && !info.noRate) return n.toLocaleString("en-US", {maximumFractionDigits: 2});
   return fmtFull(n);
 }
-function byState(state) { return RAW.filter(r => r.state === state); }
+// "US" is a synthetic selection, not a row label in RAW -- summed on demand
+// across every real state (TX/AK are already merged to one entry each, so
+// this can't double-count them). SE combines as sqrt(sum of squares),
+// same convention merge_split_states.py uses to rebuild TX/AK's own totals
+// from their merged counties. report_years is the union of every year any
+// state's current evaluation touches, so "Current inventory" nationally
+// reads as the full span in play, not one (meaningless) state's figure.
+let usAggregateCache = null;
+function usAggregateRows() {
+  if (usAggregateCache) return usAggregateCache;
+  const byKey = {};
+  RAW.forEach(r => {
+    const key = r.metric + "|" + r.stand_size_class;
+    if (!byKey[key]) byKey[key] = { metric: r.metric, stand_size_class: r.stand_size_class, estimate: 0, se2: 0, plot_count: 0, years: new Set() };
+    const g = byKey[key];
+    g.estimate += r.estimate;
+    g.se2 += r.se * r.se;
+    g.plot_count += r.plot_count;
+    (r.report_years || "").split(";").filter(Boolean).forEach(y => g.years.add(y));
+  });
+  usAggregateCache = Object.values(byKey).map(g => ({
+    state: "US", metric: g.metric, stand_size_class: g.stand_size_class,
+    estimate: g.estimate, se: Math.sqrt(g.se2),
+    se_percent: g.estimate ? Math.sqrt(g.se2) / g.estimate * 100 : 0,
+    plot_count: g.plot_count, report_years: [...g.years].sort().join(";")
+  }));
+  return usAggregateCache;
+}
+function byState(state) { return state === "US" ? usAggregateRows() : RAW.filter(r => r.state === state); }
 function byMetricRaw(rows, metric) {
   const m = {};
   rows.filter(r => r.metric === metric).forEach(r => m[r.stand_size_class] = r);
@@ -840,6 +875,8 @@ metricSel.value = "inventory_year";
 const stateSel = document.getElementById("stateSelect");
 const labels = Object.keys(STATE_META).filter(l => RAW.some(r => r.state === l));
 labels.sort((a,b) => STATE_META[a].name.localeCompare(STATE_META[b].name));
+const usOpt = document.createElement("option"); usOpt.value = "US"; usOpt.textContent = "United States (all states)";
+stateSel.appendChild(usOpt);
 labels.forEach(l => { const opt = document.createElement("option"); opt.value = l; opt.textContent = STATE_META[l].name; stateSel.appendChild(opt); });
 stateSel.value = labels.includes("MS") ? "MS" : labels[0];
 
@@ -865,14 +902,23 @@ function renderAll() {
 
 metricSel.addEventListener("change", renderAll);
 viewModeSel.addEventListener("change", renderAll);
-stateSel.addEventListener("change", () => {
-  renderDetail(stateSel.value, metricSel.value, currentView());
-  renderTiles(stateSel.value, currentView());
-  renderCaveat(stateSel.value, metricSel.value);
-  renderTable(stateSel.value);
-  renderInventoryBadge(stateSel.value);
-  highlightMapState(stateSel.value);
-  enterCountyMode(stateSel.value);
+function onStateSelected() {
+  const state = stateSel.value;
+  renderDetail(state, metricSel.value, currentView());
+  renderTiles(state, currentView());
+  renderCaveat(state, metricSel.value);
+  renderTable(state);
+  renderInventoryBadge(state);
+  highlightMapState(state);
+  document.getElementById("clearSelectionBtn").hidden = state === "US";
+  // "United States" is a synthetic total across every state, not a place to
+  // zoom into -- there's no single national county layer to show.
+  if (state === "US") { exitCountyMode(); } else { enterCountyMode(state); }
+}
+stateSel.addEventListener("change", onStateSelected);
+document.getElementById("clearSelectionBtn").addEventListener("click", () => {
+  stateSel.value = "US";
+  onStateSelected();
 });
 
 /* ---------------- glossary (static) ---------------- */
@@ -1240,7 +1286,8 @@ function renderDetail(state, metricKey, viewMode) {
     const years = reportYearsFor(state);
     const note = document.createElement("div"); note.className = "empty-note";
     note.textContent = years
-      ? STATE_META[state].name + "'s current FIA evaluation covers " + formatReportYears(years) +
+      ? (state === "US" ? "Nationally, the current FIA evaluations in use span " : STATE_META[state].name + "'s current FIA evaluation covers ") +
+        formatReportYears(years) +
         (BLENDED_VINTAGE_STATES.has(state) ? " (blended by county — see the map and caveat above)." : ".")
       : "No inventory year on file for " + STATE_META[state].name + ".";
     host.appendChild(note);
@@ -1626,6 +1673,7 @@ renderTable(stateSel.value);
 renderInventoryBadge(stateSel.value);
 renderFooter();
 highlightMapState(stateSel.value);
+document.getElementById("clearSelectionBtn").hidden = stateSel.value === "US";
 </script>
 
 </body>
