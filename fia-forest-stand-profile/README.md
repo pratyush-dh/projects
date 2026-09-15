@@ -183,3 +183,11 @@ Pages, since Actions has no way to publish to an Artifact.
 Vanilla JS + [D3](https://d3js.org/) + [topojson-client](https://github.com/topojson/topojson-client)
 for the map and charts, no build step. Python (`requests`, `pandas`,
 `beautifulsoup4`) for the data pipeline.
+
+## License
+
+The code in this folder ([LICENSE](LICENSE)) is MIT — use it, fork it, learn
+from it. The FIA estimates themselves are produced by a US federal agency and
+aren't copyrightable in the US to begin with (17 U.S.C. § 105); `states-topo.json`
+and `counties-topo.json` are [us-atlas](https://github.com/topojson/us-atlas)'s
+public-domain Census TIGER derivatives, credited above where each is introduced.
