@@ -177,6 +177,8 @@
   .map-legend-ramp span { display: block; width: 14px; height: 100%; }
   .map-legend-nodata { display: flex; align-items: center; gap: 5px; }
   .map-legend-nodata i { width: 10px; height: 10px; border-radius: 2px; background: var(--map-nodata); display: inline-block; }
+  .map-legend-swatch-item { display: flex; align-items: center; gap: 5px; }
+  .map-legend-swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block; flex: none; }
 
   .caveat { display: none; background: var(--warn-bg); color: var(--warn-ink); border-radius: 7px; padding: 10px 14px; font-size: 13px; line-height: 1.45; }
   .caveat.show { display: block; }
@@ -879,6 +881,49 @@ document.getElementById("downloadMapBtn").addEventListener("click", () => {
   saveFile("fia_map_" + metric + ".svg", src, "image/svg+xml");
 });
 
+// Two color-scale/legend styles share the map and county-map renderers:
+// a continuous quantized gradient for real quantities (13 ramp steps across
+// a min-max range), and a discrete swatch-per-value scale for the inventory-
+// year view, which only ever has a handful of distinct years on screen --
+// exact labeled swatches ("2019", "2025", ...) read far better there than a
+// gradient bar, since a gradient implies continuity a set of 5-6 whole years
+// doesn't have.
+function buildDiscreteYearScale(values, ramp) {
+  const distinct = Array.from(new Set(values)).sort((a, b) => a - b);
+  const n = distinct.length;
+  const steps = n <= 1
+    ? [ramp[ramp.length - 1]]
+    : distinct.map((_, i) => ramp[Math.round(i * (ramp.length - 1) / (n - 1))]);
+  const colorByValue = {};
+  distinct.forEach((v, i) => { colorByValue[v] = steps[i]; });
+  return { scale: v => colorByValue[v], distinct, steps };
+}
+function renderLegendDiscrete(legend, distinct, steps, metricKey, viewMode, unit) {
+  legend.innerHTML = "";
+  distinct.forEach((v, i) => {
+    const item = document.createElement("div"); item.className = "map-legend-swatch-item";
+    const sw = document.createElement("span"); sw.className = "map-legend-swatch"; sw.style.background = steps[i];
+    const label = document.createElement("span"); label.textContent = fmtPrecise(v, metricKey, viewMode) + (unit ? " " + unit : "");
+    item.append(sw, label);
+    legend.appendChild(item);
+  });
+  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
+  const i2 = document.createElement("i"); const t2 = document.createElement("span"); t2.textContent = "No data";
+  nodata.append(i2, t2);
+  legend.appendChild(nodata);
+}
+function renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit) {
+  legend.innerHTML = "";
+  const lo = document.createElement("span"); lo.textContent = fmtPrecise(domainMin, metricKey, viewMode) + " " + unit;
+  const rampEl = document.createElement("div"); rampEl.className = "map-legend-ramp";
+  ramp.forEach(c => { const s = document.createElement("span"); s.style.background = c; rampEl.appendChild(s); });
+  const hi = document.createElement("span"); hi.textContent = fmtPrecise(domainMax, metricKey, viewMode) + " " + unit;
+  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
+  const i2 = document.createElement("i"); const t2 = document.createElement("span"); t2.textContent = "No data";
+  nodata.append(i2, t2);
+  legend.append(lo, rampEl, hi, nodata);
+}
+
 function renderMap(metricKey, viewMode) {
   const info = METRIC_INFO[metricKey];
   const unit = unitFor(metricKey, viewMode);
@@ -889,8 +934,17 @@ function renderMap(metricKey, viewMode) {
   const ramp = SEQ_RAMPS[info.hue];
   const mappedLabels = Object.values(FIPS_TO_LABEL);
   const values = mappedLabels.map(l => stateTotal(l, metricKey, viewMode)).filter(v => v !== null && v > 0);
-  const domainMin = Math.min(...values), domainMax = Math.max(...values);
-  const scale = d3.scaleQuantize().domain([domainMin, domainMax]).range(ramp);
+  const legend = document.getElementById("mapLegend");
+  let scale;
+  if (info.isYear) {
+    const d = buildDiscreteYearScale(values, ramp);
+    scale = d.scale;
+    renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+  } else {
+    const domainMin = Math.min(...values), domainMax = Math.max(...values);
+    scale = d3.scaleQuantize().domain([domainMin, domainMax]).range(ramp);
+    renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+  }
 
   statesSel.attr("fill", d => {
     const label = FIPS_TO_LABEL[d.id];
@@ -898,17 +952,6 @@ function renderMap(metricKey, viewMode) {
     const v = stateTotal(label, metricKey, viewMode);
     return (v === null || v <= 0) ? "var(--map-nodata)" : scale(v);
   });
-
-  const legend = document.getElementById("mapLegend");
-  legend.innerHTML = "";
-  const lo = document.createElement("span"); lo.textContent = fmtPrecise(domainMin, metricKey, viewMode) + " " + unit;
-  const rampEl = document.createElement("div"); rampEl.className = "map-legend-ramp";
-  ramp.forEach(c => { const s = document.createElement("span"); s.style.background = c; rampEl.appendChild(s); });
-  const hi = document.createElement("span"); hi.textContent = fmtPrecise(domainMax, metricKey, viewMode) + " " + unit;
-  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
-  const i = document.createElement("i"); const t = document.createElement("span"); t.textContent = "No data";
-  nodata.append(i, t);
-  legend.append(lo, rampEl, hi, nodata);
 }
 
 /* ---------------- tiles ---------------- */
@@ -1054,10 +1097,20 @@ function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
   const byFips = {}; totals.forEach(t => byFips[t.county_fips] = t);
 
   const values = totals.map(t => t.estimate).filter(v => v > 0);
-  const domainMin = values.length ? Math.min(...values) : 0;
-  const domainMax = values.length ? Math.max(...values) : 1;
   const ramp = SEQ_RAMPS[info.hue];
-  const scale = d3.scaleQuantize().domain([domainMin === domainMax ? 0 : domainMin, domainMax || 1]).range(ramp);
+  const unit = unitFor(metricKey, viewMode);
+  const legend = document.getElementById("mapLegend");
+  let scale;
+  if (info.isYear) {
+    const d = buildDiscreteYearScale(values.length ? values : [0], ramp);
+    scale = d.scale;
+    renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+  } else {
+    const domainMin = values.length ? Math.min(...values) : 0;
+    const domainMax = values.length ? Math.max(...values) : 1;
+    scale = d3.scaleQuantize().domain([domainMin === domainMax ? 0 : domainMin, domainMax || 1]).range(ramp);
+    renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+  }
 
   const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of that county's forest (no whole-county acreage on file)" : "";
   document.getElementById("mapTitle").textContent = info.title + " by county — " + STATE_META[state].name + viewLabel;
@@ -1087,18 +1140,6 @@ function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
       showTip(event, tooltipNode(name + " County", valueText, subText));
     })
     .on("pointerleave", function() { d3.select(this).classed("hover", false); hideTip(); });
-
-  const legend = document.getElementById("mapLegend");
-  legend.innerHTML = "";
-  const unit = unitFor(metricKey, viewMode);
-  const lo = document.createElement("span"); lo.textContent = fmtPrecise(domainMin, metricKey, viewMode) + " " + unit;
-  const rampEl = document.createElement("div"); rampEl.className = "map-legend-ramp";
-  ramp.forEach(c => { const s = document.createElement("span"); s.style.background = c; rampEl.appendChild(s); });
-  const hi = document.createElement("span"); hi.textContent = fmtPrecise(domainMax, metricKey, viewMode) + " " + unit;
-  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
-  const i = document.createElement("i"); const t2 = document.createElement("span"); t2.textContent = "No data";
-  nodata.append(i, t2);
-  legend.append(lo, rampEl, hi, nodata);
 }
 
 function renderCountyTable(state, countyRows, metricKey, viewMode) {
