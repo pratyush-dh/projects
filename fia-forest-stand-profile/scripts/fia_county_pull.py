@@ -63,9 +63,12 @@ def query_county_metric(client: FIAClient, wc_code: str, snum: int) -> pd.DataFr
 
 
 def build_county_data(out_path: str = "fia_county_data.csv") -> pd.DataFrame:
-    session = requests.Session()
-    session.headers["User-Agent"] = "fia-county-pull/0.1 (research use)"
-    client = FIAClient(session=session)
+    # See fia_state_standtype_metrics.py's build_all_states for why the client
+    # is built first: it constructs its own retry/backoff-hardened session,
+    # which passing in a plain requests.Session() here would bypass entirely.
+    client = FIAClient()
+    client.session.headers["User-Agent"] = "fia-county-pull/0.1 (research use)"
+    session = client.session
 
     logging.info("Resolving current-inventory wc codes for all states...")
     state_wc = get_state_wc_codes(session)

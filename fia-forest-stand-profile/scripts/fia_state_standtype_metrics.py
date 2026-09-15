@@ -173,9 +173,14 @@ def query_standsize_metric(
 
 
 def build_all_states(out_path: str = "fia_all_states_standtype.csv") -> pd.DataFrame:
-    session = requests.Session()
-    session.headers["User-Agent"] = "fia-standtype-metrics/0.1 (research use)"
-    client = FIAClient(session=session)
+    # Build the client first so it constructs its own retry/backoff-hardened
+    # session (3 retries, exponential backoff, on both connect errors and
+    # 5xx) -- passing in a plain requests.Session() here instead would skip
+    # that entirely, leaving every call (including the metadata GET below)
+    # with a single attempt against a server that does occasionally time out.
+    client = FIAClient()
+    client.session.headers["User-Agent"] = "fia-standtype-metrics/0.1 (research use)"
+    session = client.session
 
     logger.info("Resolving current-inventory wc codes for all states...")
     state_wc = get_state_wc_codes(session)
