@@ -68,8 +68,8 @@ result on one map.
 |---|---|
 | `index.html` | The app itself, built — do not hand-edit; regenerate it from `src/template.html` via `scripts/build_index.py` |
 | `src/template.html` | The actual source: every line of markup, CSS, and JS, with `RAW`/`TOPO` placeholders for whatever the last pull produced |
-| `states-topo.json` | The *national* map's own topology (TopoJSON, Albers composite), from [us-atlas](https://github.com/topojson/us-atlas) (public domain, US Census TIGER derivative) — baked into `index.html` at build time |
-| `counties-topo.json` | County boundaries for the zoomed-in view — fetched lazily by the page itself, not touched by the build |
+| `states-topo.json` | The *national* map's own topology (TopoJSON, Albers composite) — baked into `index.html` at build time. Source: [US Census Bureau Cartographic Boundary Files, 2017](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.2017.html) (public domain), redistributed as TopoJSON by [us-atlas](https://github.com/topojson/us-atlas) — see [Data sources & citations](#data-sources--citations) |
+| `counties-topo.json` | County boundaries for the zoomed-in view — fetched lazily by the page itself, not touched by the build. Same source as above |
 | `county_json/<STATE>.json` | Per-state, per-county FIA estimates — one file per state, fetched only when a viewer drills into it |
 | `data/state_by_standtype.csv` | Long-format state-level estimates: state × metric × stand-size class, with SE, SE%, and plot counts. 50 states — Texas and Alaska already merged (see below) |
 | `data/county_by_standtype.csv` | Same, at county granularity (2,971 counties), each row carrying its own `report_years` |
@@ -189,5 +189,39 @@ for the map and charts, no build step. Python (`requests`, `pandas`,
 The code in this folder ([LICENSE](LICENSE)) is MIT — use it, fork it, learn
 from it. The FIA estimates themselves are produced by a US federal agency and
 aren't copyrightable in the US to begin with (17 U.S.C. § 105); `states-topo.json`
-and `counties-topo.json` are [us-atlas](https://github.com/topojson/us-atlas)'s
-public-domain Census TIGER derivatives, credited above where each is introduced.
+and `counties-topo.json` are public-domain US Census Bureau data, redistributed
+by [us-atlas](https://github.com/topojson/us-atlas) — see the citations below.
+
+## Data sources & citations
+
+Nothing here is original data — this project queries and reshapes work
+produced by others, so it's credited properly rather than folded quietly
+into "the map" or "the data":
+
+- **Forest inventory estimates.** U.S. Department of Agriculture, Forest
+  Service, Forest Inventory and Analysis (FIA) Program. Retrieved via the
+  live FIADB-API `/fullreport` endpoint
+  ([research.fs.usda.gov/products/dataandtools/evalidator-and-fiadb-api](https://research.fs.usda.gov/products/dataandtools/evalidator-and-fiadb-api)).
+  This project queries the same underlying estimation engine as USDA's own
+  **EVALIDator** web tool, but is not affiliated with or endorsed by USDA or
+  the Forest Service. Recommended EVALIDator citation:
+  > Miles, P.D. Forest Inventory EVALIDator web-application. St. Paul, MN:
+  > U.S. Department of Agriculture, Forest Service, Northern Research
+  > Station. [research.fs.usda.gov/understory/evalidator-user-guide](https://research.fs.usda.gov/understory/evalidator-user-guide)
+- **State and county boundaries.** U.S. Census Bureau, Cartographic
+  Boundary Files, 2017 (public domain) — a generalized, small-scale-mapping
+  derivative of the Bureau's MAF/TIGER geographic database, not the raw
+  TIGER/Line Shapefiles themselves. Recommended citation, per the [Census
+  Bureau's own citation guidance](https://www.census.gov/about/policies/citation.html):
+  > U.S. Census Bureau, "cb_2017_us_state_20m" / "cb_2017_us_county_20m",
+  > Cartographic Boundary Files, 2017,
+  > [census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.2017.html](https://www.census.gov/geographies/mapping-files/time-series/geo/carto-boundary-file.2017.html).
+
+  This project uses [us-atlas](https://github.com/topojson/us-atlas)'s
+  TopoJSON redistribution of those files (`states-topo.json`,
+  `counties-topo.json`) rather than processing the shapefiles directly —
+  credited as the immediate source of those two files above, alongside the
+  Census Bureau as the original data owner.
+- **Land area denominators.** U.S. Census Bureau state land-area reference
+  figures (`STATE_LAND_ACRES` in `src/template.html`), used only for the
+  "per acre of whole state" view — a coarse denominator, not FIA data.

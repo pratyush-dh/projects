@@ -8,3 +8,4 @@ fia_all_states_standtype_merged.csv
 fia_county_data.csv
 fia_county_data_merged.csv
 fia_county_data_fix.csv
+__pycache__/
