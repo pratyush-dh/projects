@@ -1,0 +1,80 @@
+name: "fia-forest-stand-profile: monthly data refresh"
+
+on:
+  schedule:
+    # FIA evaluations post on their own schedule, not continuously -- this
+    # re-harvests on a cadence that matches how the source actually updates,
+    # not because the page needs to look "live".
+    - cron: "30 5 1 * *" # 05:30 UTC on the 1st of every month
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+defaults:
+  run:
+    working-directory: fia-forest-stand-profile
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    # Both pulls are politely throttled against a small government server and
+    # take 10-20 min each on their own -- generous headroom over that, not a
+    # sign anything here is expected to run long.
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pull state-level estimates
+        run: python scripts/fia_state_standtype_metrics.py
+
+      - name: Clean and reshape state-level labels
+        run: python scripts/clean_reshape_standtype.py
+
+      - name: Pull county-level estimates
+        run: python scripts/fia_county_pull.py
+
+      - name: Merge TX East/West and AK Coastal/Interior
+        run: python scripts/merge_split_states.py
+
+      - name: Finalize canonical data/ CSVs
+        run: python scripts/finalize_outputs.py
+
+      - name: Rebuild county_json/<STATE>.json
+        run: python scripts/build_county_files.py
+
+      - name: Rebuild index.html
+        run: python scripts/build_index.py
+
+      - name: Open a PR if anything changed
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "fia-forest-stand-profile: monthly data refresh"
+          title: "fia-forest-stand-profile: monthly data refresh"
+          body: |
+            Automated re-pull from the live FIADB-API, following exactly the
+            steps in `fia-forest-stand-profile/README.md#running-the-data-pipeline-yourself`.
+            Nothing here is hand-edited.
+
+            This is not a live feed being kept fresh minute-to-minute -- FIA's
+            evaluations post on their own schedule, and this job just re-harvests
+            on a matching monthly cadence. Nothing here merges automatically:
+            review the diff before merging. A shift outside the usual small
+            revisions (an eval group renamed, a field reshaped, a state's
+            evaluation years jumping unexpectedly) most likely means something
+            changed on USDA's side, not a bug in this pipeline -- worth a closer
+            look before merging rather than after.
+          branch: fia-forest-stand-profile/monthly-refresh
+          delete-branch: true
+          add-paths: |
+            fia-forest-stand-profile/index.html
+            fia-forest-stand-profile/data/*.csv
+            fia-forest-stand-profile/county_json/*.json

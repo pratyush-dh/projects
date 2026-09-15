@@ -66,17 +66,22 @@ result on one map.
 
 | Path | Contents |
 |---|---|
-| `index.html` | The app itself — self-contained, all state-level data inlined, county-level data and boundaries lazy-loaded from the files below |
-| `counties-topo.json` | US county boundaries (TopoJSON, Albers composite projection), from [us-atlas](https://github.com/topojson/us-atlas) (public domain, US Census TIGER derivative) |
-| `county_json/<STATE>.json` | Per-state, per-county FIA estimates — one file per state/region, fetched only when a viewer drills into it |
+| `index.html` | The app itself, built — do not hand-edit; regenerate it from `src/template.html` via `scripts/build_index.py` |
+| `src/template.html` | The actual source: every line of markup, CSS, and JS, with `RAW`/`TOPO` placeholders for whatever the last pull produced |
+| `states-topo.json` | The *national* map's own topology (TopoJSON, Albers composite), from [us-atlas](https://github.com/topojson/us-atlas) (public domain, US Census TIGER derivative) — baked into `index.html` at build time |
+| `counties-topo.json` | County boundaries for the zoomed-in view — fetched lazily by the page itself, not touched by the build |
+| `county_json/<STATE>.json` | Per-state, per-county FIA estimates — one file per state, fetched only when a viewer drills into it |
 | `data/state_by_standtype.csv` | Long-format state-level estimates: state × metric × stand-size class, with SE, SE%, and plot counts. 50 states — Texas and Alaska already merged (see below) |
 | `data/county_by_standtype.csv` | Same, at county granularity (2,971 counties), each row carrying its own `report_years` |
 | `scripts/client.py` | Thin FIADB-API `/fullreport` client (query builder + response parser) |
 | `scripts/schema_scraper.py` | Scrapes the FIADB-API's own parameter reference pages into a machine-readable table/column map |
 | `scripts/fia_state_standtype_metrics.py` | Pulls all 7 metrics × all state/region evaluations |
-| `scripts/fia_county_pull.py` | Same, cross-tabbed by county (one query per state returns every county at once) |
+| `scripts/clean_reshape_standtype.py` | Strips FIA's internal label prefixes, drops the null stand-size bucket |
+| `scripts/fia_county_pull.py` | Same pull as above, cross-tabbed by county (one query per state returns every county at once) |
 | `scripts/merge_split_states.py` | Merges Texas (East/West) and Alaska (Coastal/Interior) into one non-overlapping dataset per state (see below) |
-| `scripts/build_county_files.py`, `scripts/clean_reshape_standtype.py` | Post-processing: label cleanup, county FIPS parsing, per-state file splitting |
+| `scripts/finalize_outputs.py` | Copies the merged output into the canonical `data/*.csv` files above, with explicit column selection |
+| `scripts/build_county_files.py` | Splits `data/county_by_standtype.csv` into `county_json/<STATE>.json` |
+| `scripts/build_index.py` | Fills `src/template.html`'s placeholders in from `data/state_by_standtype.csv` + `states-topo.json` -> `index.html` |
 
 ## Coverage notes (real data gaps, not bugs)
 
@@ -134,13 +139,44 @@ result on one map.
 ```bash
 pip install -r requirements.txt
 python scripts/fia_state_standtype_metrics.py   # state-level pull -> fia_all_states_standtype.csv
+python scripts/clean_reshape_standtype.py       # label cleanup -> fia_all_states_standtype_clean.csv
 python scripts/fia_county_pull.py               # county-level pull -> fia_county_data.csv
 python scripts/merge_split_states.py            # merge TX East/West + AK Coastal/Interior
-python scripts/build_county_files.py            # split into county_json/<STATE>.json
+python scripts/finalize_outputs.py              # -> data/state_by_standtype.csv, data/county_by_standtype.csv
+python scripts/build_county_files.py            # -> county_json/<STATE>.json
+python scripts/build_index.py                   # data/state_by_standtype.csv + src/template.html -> index.html
 ```
 
 Both pulls are politely throttled (a small government server, not built for
-bulk scraping) and take roughly 10–20 minutes each.
+bulk scraping) and take roughly 10–20 minutes each. `src/template.html` is
+the actual app — markup, CSS, every line of JS — with two placeholders
+(`RAW`, `TOPO`) standing in for whatever the last pull produced;
+`build_index.py` is the only step that touches `index.html`, the file
+GitHub Pages actually serves. `states-topo.json` (the *national* map's
+topology) is a one-time, no-need-to-re-pull asset from
+[us-atlas](https://github.com/topojson/us-atlas) — separate from
+`counties-topo.json`, which is fetched lazily by the page itself and isn't
+touched by this pipeline at all.
+
+A GitHub Actions workflow (`.github/workflows/monthly-refresh.yml`) runs
+this whole sequence on the 1st of each month and opens a pull request if
+anything changed — see below.
+
+## Keeping this current
+
+FIA's evaluations post on their own schedule, not continuously — this
+isn't a live feed to poll every minute, it's a periodic survey to re-harvest
+on a cadence that matches how the source actually updates. A monthly
+GitHub Actions job (`.github/workflows/monthly-refresh.yml`) re-runs the
+full pipeline above and opens a pull request with whatever changed —
+nothing merges automatically, so a bad pull (a USDA-side API or format
+change, say) gets caught before it goes live rather than after. Trigger it
+by hand from the Actions tab (`workflow_dispatch`) any time, or just wait
+for the 1st of the month.
+
+The Claude Artifact version of this project (linked from the portfolio
+entry) is a separate, one-time copy — this workflow only updates GitHub
+Pages, since Actions has no way to publish to an Artifact.
 
 ## Stack
 

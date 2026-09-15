@@ -1,0 +1,10 @@
+# Intermediate pipeline outputs -- not the canonical dataset. The pipeline's
+# final, checked-in output is data/*.csv, county_json/*.json, and index.html;
+# everything below is a working file scripts/*.py produce along the way.
+fia_all_states_standtype.csv
+fia_all_states_standtype_clean.csv
+fia_all_states_standtype_wide.csv
+fia_all_states_standtype_merged.csv
+fia_county_data.csv
+fia_county_data_merged.csv
+fia_county_data_fix.csv

@@ -1,0 +1,1632 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive US forest inventory explorer built on live USDA FIADB-API data: volume, biomass, growth, mortality, removals, sawlog stock, forest area, and inventory currency by stand-size class, state and county level, with a zoomable choropleth map, export preview, and custom CSV builder.">
+<title>Forest Stand Profile</title>
+<script>
+  // Applied synchronously, before CSS paints, so a returning visitor's saved
+  // theme choice doesn't flash the system-default theme first.
+  try {
+    var savedTheme = localStorage.getItem("fia-theme");
+    if (savedTheme === "light" || savedTheme === "dark") document.documentElement.setAttribute("data-theme", savedTheme);
+  } catch (e) {}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<style>
+  :root {
+    color-scheme: light;
+    --surface-page:   #f5f7f1;
+    --surface-card:   #ffffff;
+    --surface-tile:   #f0f3ec;
+    --text-primary:   #14170f;
+    --text-secondary: #52514e;
+    --text-muted:     #898781;
+    --gridline:       #e1e0d9;
+    --baseline:       #c3c2b7;
+    --border:         rgba(11,11,11,0.10);
+    --accent:         #2f5233;
+    --accent-soft:    #e4ece2;
+    --accent-ink:     #1c331f;
+    --diam-small:     #6da7ec;
+    --diam-medium:    #2a78d6;
+    --diam-large:     #184f95;
+    --nonstocked:     #726f68;
+    --warn-ink:       #8a5a1c;
+    --warn-bg:        #f7ecd9;
+    --map-nodata:     #dedcd3;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --surface-page:   #0e100c;
+      --surface-card:   #1a1a19;
+      --surface-tile:   #202120;
+      --text-primary:   #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted:     #898781;
+      --gridline:       #2c2c2a;
+      --baseline:       #383835;
+      --border:         rgba(255,255,255,0.10);
+      --accent:         #7fbd9a;
+      --accent-soft:    #1c2a1e;
+      --accent-ink:     #a9d9bd;
+      --diam-small:     #86b6ef;
+      --diam-medium:    #3987e5;
+      --diam-large:     #1c5cab;
+      --nonstocked:     #9a978f;
+      --warn-ink:       #e0b169;
+      --warn-bg:        #2c2416;
+      --map-nodata:     #333330;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --surface-page:   #0e100c;
+    --surface-card:   #1a1a19;
+    --surface-tile:   #202120;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #898781;
+    --gridline:       #2c2c2a;
+    --baseline:       #383835;
+    --border:         rgba(255,255,255,0.10);
+    --accent:         #7fbd9a;
+    --accent-soft:    #1c2a1e;
+    --accent-ink:     #a9d9bd;
+    --diam-small:     #86b6ef;
+    --diam-medium:    #3987e5;
+    --diam-large:     #1c5cab;
+    --nonstocked:     #9a978f;
+    --warn-ink:       #e0b169;
+    --warn-bg:        #2c2416;
+    --map-nodata:     #333330;
+  }
+
+  * { box-sizing: border-box; }
+  html { color-scheme: light dark; }
+  body {
+    margin: 0;
+    background: var(--surface-page);
+    color: var(--text-primary);
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+    padding-inline: 20px;
+    padding-block: 32px 56px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; display: flex; flex-direction: column; gap: 22px; }
+
+  h1, h2, h3 { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; text-wrap: balance; margin: 0; }
+
+  .masthead { position: relative; background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 22px 26px; display: flex; flex-direction: column; gap: 8px; }
+  .theme-toggle {
+    position: absolute; top: 16px; right: 16px; width: 34px; height: 34px; border-radius: 8px;
+    background: var(--surface-tile); border: 1px solid var(--border); cursor: pointer;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; color: var(--text-secondary);
+  }
+  .theme-toggle:hover { background: var(--accent-soft); }
+  .theme-toggle-icon { display: none; }
+  :root:not([data-theme="dark"]) .theme-toggle-icon[data-icon="light"] { display: block; }
+  :root[data-theme="dark"] .theme-toggle-icon[data-icon="dark"] { display: block; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme]) .theme-toggle-icon[data-icon="light"] { display: none; }
+    :root:not([data-theme]) .theme-toggle-icon[data-icon="dark"] { display: block; }
+  }
+  .eyebrow { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); font-weight: 500; }
+  .masthead-title { font-size: 28px; font-weight: 600; }
+  .masthead-sub { font-size: 14.5px; color: var(--text-secondary); max-width: 680px; line-height: 1.55; }
+
+  .fact-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 4px; padding-top: 16px; border-top: 1px solid var(--gridline); }
+  @media (max-width: 780px) { .fact-strip { grid-template-columns: 1fr; } }
+  .fact { display: flex; flex-direction: column; gap: 4px; }
+  .fact-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); }
+  .fact-body { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+
+  .controls-bar {
+    background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 20px; display: flex; gap: 24px; align-items: flex-end; flex-wrap: wrap;
+  }
+  .control-group { display: flex; flex-direction: column; gap: 4px; }
+  .control-label { font-size: 11px; color: var(--text-muted); font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; letter-spacing: 0.06em; text-transform: uppercase; }
+  select {
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 17px; font-weight: 600; color: var(--text-primary);
+    background: var(--accent-soft); border: 1px solid var(--border); border-radius: 7px; padding: 7px 12px; cursor: pointer;
+  }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #metricSelect { min-width: 260px; }
+  #stateSelect { min-width: 200px; }
+  .inventory-badge { font-size: 11px; color: var(--text-muted); font-variant-numeric: tabular-nums; margin-top: 2px; white-space: nowrap; }
+  .inventory-badge b { color: var(--text-secondary); font-weight: 600; }
+  .btn {
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 12.5px; font-weight: 600;
+    background: var(--surface-tile); color: var(--text-primary); border: 1px solid var(--border);
+    border-radius: 7px; padding: 8px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+    white-space: nowrap;
+  }
+  .btn[hidden] { display: none; }
+  .btn:hover { background: var(--accent-soft); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--text-primary); color: var(--surface-card); font-size: 12.5px;
+    padding: 9px 16px; border-radius: 7px; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; z-index: 60;
+  }
+  .toast.show { opacity: 1; }
+
+  /* ---------- map + tiles side by side ---------- */
+  .map-and-tiles { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 14px; align-items: start; }
+  @media (max-width: 860px) { .map-and-tiles { grid-template-columns: 1fr; } }
+
+  /* ---------- map ---------- */
+  .map-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px 14px; min-width: 0; }
+  .map-card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+  .map-title { font-size: 15px; font-weight: 600; }
+  .map-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+  .map-svg-wrap { width: 100%; overflow: hidden; border-radius: 8px; background: var(--surface-tile); touch-action: none; cursor: grab; }
+  .map-svg-wrap:active { cursor: grabbing; }
+  svg#mapSvg { display: block; width: 100%; height: auto; }
+  .map-state { stroke: var(--surface-card); stroke-width: 0.6; cursor: pointer; transition: filter 0.08s ease; }
+  .map-state:hover, .map-state.hover { filter: brightness(1.12); stroke-width: 1.2; }
+  .map-state.selected { stroke: var(--accent); stroke-width: 1.6; }
+  .state-label {
+    font-size: 9px; font-weight: 600; fill: #14170f;
+    stroke: #ffffff; stroke-width: 2.5px; paint-order: stroke fill;
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+  }
+  .map-legend { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-secondary); flex-wrap: wrap; }
+  .map-legend-ramp { display: flex; height: 10px; border-radius: 2px; overflow: hidden; }
+  .map-legend-ramp span { display: block; width: 14px; height: 100%; }
+  .map-legend-nodata { display: flex; align-items: center; gap: 5px; }
+  .map-legend-nodata i { width: 10px; height: 10px; border-radius: 2px; background: var(--map-nodata); display: inline-block; }
+  .map-legend-swatch-item { display: flex; align-items: center; gap: 5px; }
+  .map-legend-swatch { width: 13px; height: 13px; border-radius: 3px; display: inline-block; flex: none; }
+
+  .caveat { display: none; background: var(--warn-bg); color: var(--warn-ink); border-radius: 7px; padding: 10px 14px; font-size: 13px; line-height: 1.45; }
+  .caveat.show { display: block; }
+
+  /* ---------- stat tiles (sidebar column) ---------- */
+  .tiles-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; height: 100%; }
+  .tiles-card-title { font-size: 11px; color: var(--text-muted); font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; letter-spacing: 0.06em; text-transform: uppercase; padding: 0 4px 2px; }
+  #tiles { display: flex; flex-direction: column; gap: 6px; }
+  .tile {
+    background: var(--surface-tile); border: 1px solid var(--border); border-radius: 8px;
+    padding: 9px 11px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    min-width: 0; cursor: pointer;
+  }
+  .tile.active { border-color: var(--accent); background: var(--accent-soft); }
+  .tile-label { font-size: 12px; color: var(--text-secondary); font-weight: 500; }
+  .tile-valwrap { display: flex; align-items: baseline; gap: 4px; flex: none; text-align: right; }
+  .tile-value { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; white-space: nowrap; }
+  .tile-unit { font-size: 10.5px; color: var(--text-muted); white-space: nowrap; }
+
+  /* ---------- detail chart ---------- */
+  .detail-card { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px 12px; }
+  .detail-title { font-size: 15px; font-weight: 600; }
+  .detail-sub { font-size: 12px; color: var(--text-muted); margin: 2px 0 10px; max-width: 620px; line-height: 1.5; }
+  svg.chart { display: block; width: 100%; height: auto; overflow: visible; }
+  .bar-label { font-variant-numeric: tabular-nums; font-size: 11px; fill: var(--text-secondary); }
+  .axis-label { font-variant-numeric: tabular-nums; font-size: 10.5px; fill: var(--text-muted); }
+  .cat-label { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11px; fill: var(--text-secondary); }
+  .gridline { stroke: var(--gridline); stroke-width: 1; }
+  .baseline { stroke: var(--baseline); stroke-width: 1; }
+  .errorbar { stroke: var(--text-primary); stroke-width: 1.3; opacity: 0.55; }
+  .bar.hover { filter: brightness(1.08); }
+
+  .empty-note { display: flex; align-items: center; justify-content: center; min-height: 180px; color: var(--text-muted); font-size: 13px; text-align: center; padding: 24px; }
+
+  /* ---------- glossary ---------- */
+  .glossary { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px 20px; display: flex; flex-direction: column; gap: 10px; }
+  .glossary-title { font-size: 13px; font-weight: 600; }
+  .glossary-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px 20px; }
+  @media (max-width: 640px) { .glossary-grid { grid-template-columns: 1fr; } }
+  .glossary-term { display: flex; gap: 8px; }
+  .glossary-dot { width: 11px; height: 11px; border-radius: 3px; flex: none; margin-top: 3px; }
+  .glossary-name { font-size: 13px; font-weight: 600; }
+  .glossary-alias { font-size: 11.5px; color: var(--text-muted); font-weight: 400; }
+  .glossary-def { font-size: 12px; color: var(--text-secondary); line-height: 1.5; margin-top: 2px; }
+  .glossary-source { font-size: 11px; color: var(--text-muted); }
+
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--gridline); }
+  .legend-item { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--text-secondary); }
+  .legend-swatch { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+
+  .tooltip {
+    position: fixed; pointer-events: none; background: var(--text-primary); color: var(--surface-card);
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 12px; line-height: 1.5; border-radius: 6px;
+    padding: 8px 10px; box-shadow: 0 4px 14px rgba(0,0,0,0.22); z-index: 50; opacity: 0;
+    transform: translate(-50%, calc(-100% - 10px)); transition: opacity 0.08s ease; max-width: 220px;
+  }
+  .tooltip.show { opacity: 1; }
+  .tooltip .tt-value { font-variant-numeric: tabular-nums; font-weight: 600; font-size: 13px; }
+  .tooltip .tt-sub { opacity: 0.75; font-size: 11px; }
+
+  /* ---------- table ---------- */
+  .table-section { background: var(--surface-card); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px 6px; }
+  .table-head-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+  .table-title { font-size: 14px; font-weight: 600; }
+  .table-scroll { overflow-x: auto; }
+  table.data-table { border-collapse: collapse; width: 100%; font-size: 12.5px; min-width: 620px; }
+  table.data-table th, table.data-table td { text-align: right; padding: 7px 10px; border-bottom: 1px solid var(--gridline); font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  table.data-table th:first-child, table.data-table td:first-child, table.data-table th:nth-child(2), table.data-table td:nth-child(2) { text-align: left; font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; }
+  table.data-table thead th { color: var(--text-muted); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid var(--baseline); }
+  table.data-table tbody tr:last-child td { border-bottom: none; }
+  .swatch-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
+
+  /* ---------- custom export panel ---------- */
+  .export-intro { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; max-width: 640px; margin: 0 0 14px; }
+  .export-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+  .export-col { min-width: 170px; }
+  .export-col-wide { flex: 1; min-width: 220px; }
+  .export-col-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .export-quick-links { display: flex; gap: 8px; }
+  .export-quick-links button { background: none; border: none; padding: 0; font-size: 11px; color: var(--accent-ink); cursor: pointer; text-decoration: underline; }
+  .export-checklist { border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; background: var(--surface-tile); }
+  .export-checklist-states { max-height: 220px; }
+  .export-checklist label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+  .export-checklist input { margin: 0; cursor: pointer; }
+  .export-status { font-size: 12px; color: var(--text-muted); align-self: center; }
+
+  /* ---------- export preview modal ---------- */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(11,11,11,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-overlay[hidden] { display: none; }
+  .modal-box { background: var(--surface-card); border-radius: 12px; width: min(1040px, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); flex: none; }
+  .modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .modal-close { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--text-muted); padding: 0 4px; }
+  .modal-close:hover { color: var(--text-primary); }
+  .modal-body { padding: 18px; overflow: auto; background: #ecece8; display: flex; justify-content: center; flex: 1 1 auto; min-height: 0; }
+  .modal-body svg { max-width: 100%; height: auto; background: #ffffff; box-shadow: 0 1px 6px rgba(0,0,0,0.18); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--border); flex: none; }
+
+  footer.provenance { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); border-top: 1px solid var(--gridline); padding-top: 16px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="masthead">
+    <button type="button" class="theme-toggle" id="themeToggle" aria-label="Toggle dark mode">
+      <span class="theme-toggle-icon" data-icon="light">&#9728;</span>
+      <span class="theme-toggle-icon" data-icon="dark">&#9789;</span>
+    </button>
+    <div class="eyebrow">USDA Forest Service &middot; Forest Inventory &amp; Analysis (FIA) Program</div>
+    <div class="masthead-title">Forest Stand Profile</div>
+    <div class="masthead-sub">How much wood volume, living biomass, and merchantable timber each US state holds &mdash; how fast it's growing versus dying versus being cut &mdash; and whether that wood sits in young regenerating stands or old mature ones. Every figure comes from the federal government's tree-by-tree inventory of American forests.</div>
+    <div class="fact-strip">
+      <div class="fact">
+        <div class="fact-label">What this shows</div>
+        <div class="fact-body">Volume, biomass, growth, mortality, removals, sawlog stock, and forest area for every US state, broken down by stand age &mdash; seedling/sapling &rarr; poletimber &rarr; sawtimber &mdash; as totals or per-acre density. Pick a state to zoom in and see the same breakdown county by county.</div>
+      </div>
+      <div class="fact">
+        <div class="fact-label">Built from</div>
+        <div class="fact-body">Live queries against USDA's own FIADB-API &mdash; the same estimation engine behind their official EVALIDator tool &mdash; run for each state's most current forest survey. Nothing simulated or interpolated; sampling error is carried through.</div>
+      </div>
+      <div class="fact">
+        <div class="fact-label">Why it matters</div>
+        <div class="fact-body">EVALIDator, USDA's own query tool, already supports custom breakdowns and per-acre denominators &mdash; but one state and one query at a time, with no cross-state map. USDA's separately published state bulletins are static, fixed-format tables. This page runs the same kind of live query across every state at once, on one map.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls-bar">
+    <div class="control-group">
+      <label class="control-label" for="metricSelect">Metric</label>
+      <select id="metricSelect"></select>
+    </div>
+    <div class="control-group">
+      <label class="control-label" for="viewModeSelect">Show as</label>
+      <select id="viewModeSelect">
+        <option value="total">Total</option>
+        <option value="per_forest_acre">Per acre of that stand type</option>
+        <option value="per_state_acre">Per acre of whole state</option>
+      </select>
+    </div>
+    <div class="control-group">
+      <label class="control-label" for="stateSelect">State / unit</label>
+      <select id="stateSelect"></select>
+      <div class="inventory-badge" id="inventoryBadge"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="backToUsBtn" type="button" hidden>&#8592; Back to US map</button>
+      <button class="btn" id="resetZoomBtn" type="button">&#8635; Reset zoom</button>
+      <button class="btn" id="downloadMapBtn" type="button">&#8681; Download map (SVG)</button>
+      <button class="btn" id="openExportBtn" type="button">&#128202; View / export data</button>
+    </div>
+  </div>
+
+  <div class="map-and-tiles">
+    <div class="map-card">
+      <div class="map-card-head">
+        <div>
+          <div class="map-title" id="mapTitle"></div>
+          <div class="map-sub" id="mapSub"></div>
+        </div>
+      </div>
+      <div class="map-svg-wrap" id="mapSvgWrap">
+        <svg id="mapSvg" viewBox="0 0 975 610"></svg>
+      </div>
+      <div class="map-legend" id="mapLegend"></div>
+    </div>
+
+    <div class="tiles-card">
+      <div class="tiles-card-title" id="tilesCardTitle">Headline totals</div>
+      <div id="tiles"></div>
+    </div>
+  </div>
+
+  <div class="table-section" id="exportPanel" hidden>
+    <div class="table-title">Custom data export</div>
+    <p class="export-intro">Pick any states and any metrics, at state or county level, and download one combined CSV — the multi-state, multi-variable pull EVALIDator makes you run one query at a time for.</p>
+    <div class="export-controls">
+      <div class="control-group">
+        <label class="control-label" for="exportGranularity">Granularity</label>
+        <select id="exportGranularity">
+          <option value="state">State totals</option>
+          <option value="county">County-level</option>
+        </select>
+      </div>
+      <div class="control-group export-col">
+        <div class="export-col-head">
+          <label class="control-label">Metrics</label>
+          <div class="export-quick-links"><button type="button" data-target="exportMetricList" data-action="all">All</button><button type="button" data-target="exportMetricList" data-action="none">None</button></div>
+        </div>
+        <div class="export-checklist" id="exportMetricList"></div>
+      </div>
+      <div class="control-group export-col export-col-wide">
+        <div class="export-col-head">
+          <label class="control-label">States</label>
+          <div class="export-quick-links"><button type="button" data-target="exportStateList" data-action="all">All</button><button type="button" data-target="exportStateList" data-action="none">None</button></div>
+        </div>
+        <div class="export-checklist export-checklist-states" id="exportStateList"></div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-left:0">
+      <button class="btn" id="exportDownloadBtn" type="button">&#8681; Download custom CSV</button>
+      <span class="export-status" id="exportStatus"></span>
+    </div>
+  </div>
+
+  <div class="caveat" id="caveat"></div>
+
+  <div class="detail-card">
+    <div class="detail-title" id="detailTitle"></div>
+    <div class="detail-sub" id="detailSub"></div>
+    <div id="detailChartHost"></div>
+  </div>
+
+  <div class="glossary">
+    <div class="glossary-title">What each stand-size class means</div>
+    <div class="glossary-grid" id="glossaryGrid"></div>
+    <div class="glossary-source">Source: FIADB-API parameter metadata for Stand-size class (live-queried), quoted verbatim.</div>
+  </div>
+
+  <div class="table-section">
+    <div class="table-head-row">
+      <div class="table-title" id="tableTitle">Full estimate table</div>
+      <div class="btn-row" style="margin-left:0">
+        <button class="btn" id="downloadStateCsvBtn" type="button">&#8681; This state (CSV)</button>
+        <button class="btn" id="downloadAllCsvBtn" type="button">&#8681; All states (CSV)</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr><th>Stand-size class</th><th>Metric</th><th>Estimate</th><th>Unit</th><th>SE</th><th>SE %</th><th>Plots</th></tr>
+        </thead>
+        <tbody id="table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="table-section" id="countyTableSection" hidden>
+    <div class="table-head-row">
+      <div class="table-title" id="countyTableTitle">By county</div>
+      <div class="btn-row" style="margin-left:0">
+        <button class="btn" id="downloadCountyCsvBtn" type="button">&#8681; Counties (CSV)</button>
+      </div>
+    </div>
+    <div class="table-scroll">
+      <table class="data-table">
+        <thead>
+          <tr><th>County</th><th id="countyValueHeader">Estimate</th><th>Unit</th><th>Plots</th></tr>
+        </thead>
+        <tbody id="county-table-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <footer class="provenance" id="provenance"></footer>
+
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="exportPreviewOverlay" hidden>
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">Map export preview</div>
+      <button type="button" class="modal-close" id="exportPreviewClose" aria-label="Close preview">&times;</button>
+    </div>
+    <div class="modal-body" id="exportPreviewBody"></div>
+    <div class="modal-actions">
+      <button class="btn" id="exportPreviewCancel" type="button">Cancel</button>
+      <button class="btn" id="exportPreviewConfirm" type="button">&#8681; Download SVG</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------------- data ---------------- */
+const RAW = /*__DATA__*/[];const TOPO = /*__TOPO__*/{};
+const STATE_META = {
+  AL:{name:"Alabama"}, AK:{name:"Alaska"}, AZ:{name:"Arizona"}, AR:{name:"Arkansas"}, CA:{name:"California"},
+  CO:{name:"Colorado"}, CT:{name:"Connecticut"}, DE:{name:"Delaware"}, FL:{name:"Florida"}, GA:{name:"Georgia"},
+  HI:{name:"Hawaii"}, ID:{name:"Idaho"}, IL:{name:"Illinois"}, IN:{name:"Indiana"}, IA:{name:"Iowa"},
+  KS:{name:"Kansas"}, KY:{name:"Kentucky"}, LA:{name:"Louisiana"}, ME:{name:"Maine"}, MD:{name:"Maryland"},
+  MA:{name:"Massachusetts"}, MI:{name:"Michigan"}, MN:{name:"Minnesota"}, MS:{name:"Mississippi"}, MO:{name:"Missouri"},
+  MT:{name:"Montana"}, NE:{name:"Nebraska"}, NV:{name:"Nevada"}, NH:{name:"New Hampshire"}, NJ:{name:"New Jersey"},
+  NM:{name:"New Mexico"}, NY:{name:"New York"}, NC:{name:"North Carolina"}, ND:{name:"North Dakota"}, OH:{name:"Ohio"},
+  OK:{name:"Oklahoma"}, OR:{name:"Oregon"}, PA:{name:"Pennsylvania"}, RI:{name:"Rhode Island"}, SC:{name:"South Carolina"},
+  SD:{name:"South Dakota"}, TN:{name:"Tennessee"}, TX:{name:"Texas"}, UT:{name:"Utah"}, VT:{name:"Vermont"},
+  VA:{name:"Virginia"}, WA:{name:"Washington"}, WV:{name:"West Virginia"}, WI:{name:"Wisconsin"}, WY:{name:"Wyoming"}
+};
+// FIPS (2-digit, as used by the topojson feature ids) <-> state label. One
+// entry each way now -- Texas and Alaska used to be split into overlapping
+// East/West and Coastal/Interior "units" here, which caused the same real
+// county to carry two different, silently conflicting values depending on
+// which unit happened to be selected. They're merged upstream now (see
+// merge_split_states.py): each county keeps whichever survey covers it,
+// preferring the newer one, so every county appears exactly once.
+const FIPS_TO_LABEL = {"01":"AL","02":"AK","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
+const STATE_FIPS = {};
+Object.entries(FIPS_TO_LABEL).forEach(([fips, label]) => { STATE_FIPS[label] = fips; });
+// States where county rows can carry different report_years from each other
+// (the merge above blends two survey vintages by county) -- flagged so the
+// UI can note it instead of implying one uniform inventory year for the state.
+const BLENDED_VINTAGE_STATES = new Set(["TX", "AK"]);
+
+const CLASS_ORDER = ["Small diameter","Medium diameter","Large diameter","Nonstocked"];
+const CLASS_COLOR = { "Small diameter":"var(--diam-small)", "Medium diameter":"var(--diam-medium)", "Large diameter":"var(--diam-large)", "Nonstocked":"var(--nonstocked)" };
+const CLASS_ALIAS = { "Small diameter":"Seedling / sapling stands", "Medium diameter":"Poletimber stands", "Large diameter":"Sawtimber stands", "Nonstocked":"Nonstocked" };
+const CLASS_DEF = {
+  "Nonstocked": "Forest land stocked with less than 10 percent of full stocking with live trees. Examples are recently cutover areas or recently reverted agricultural fields.",
+  "Small diameter": "Forest land stocked with at least 10 percent of full stocking with live trees, with half or more of that stocking in seedlings or saplings, or both.",
+  "Medium diameter": "Forest land stocked with at least 10 percent of full stocking with live trees, with half or more of that stocking in poletimber or sawtimber trees, and where poletimber stocking exceeds sawtimber stocking.",
+  "Large diameter": "Forest land stocked with at least 10 percent of full stocking with live trees, with half or more of that stocking in poletimber or sawtimber trees, and where sawtimber stocking is at least equal to poletimber stocking."
+};
+
+const METRIC_INFO = {
+  inventory_year: { title: "Latest inventory year", short:"Inventory", unit: "", full: "The most recent year folded into each state's current FIA evaluation — darker green is more recently surveyed, matching FIA's own DataMart convention.", derived:true, hue:"green", noRate:true, isYear:true },
+  volume:         { title: "Live volume", short:"Volume", unit: "ft³", full: "Net sound total-stem volume, live trees ≥ 5 in d.b.h./d.r.c., on forest land", snum: 11287, derived:false, hue:"blue" },
+  biomass:        { title: "Aboveground biomass", short:"Biomass", unit: "tons", full: "Aboveground biomass, live trees ≥ 1 in d.b.h./d.r.c., on forest land", snum: 10, derived:false, hue:"green" },
+  growth:         { title: "Net annual growth", short:"Growth", unit: "ft³/yr", full: "Average annual net growth, sound total-stem volume, trees ≥ 5 in d.b.h./d.r.c., on forest land", snum: 11303, derived:false, hue:"aqua" },
+  removals:       { title: "Annual removals", short:"Removals", unit: "ft³/yr", full: "Average annual removals, sound total-stem volume, trees ≥ 5 in d.b.h./d.r.c., on forest land", snum: 11305, derived:false, hue:"orange" },
+  mortality:      { title: "Annual mortality", short:"Mortality", unit: "ft³/yr", full: "Average annual mortality, sound total-stem volume, trees ≥ 5 in d.b.h./d.r.c., on forest land", snum: 11304, derived:false, hue:"red" },
+  sawlog:         { title: "Sawlog volume", short:"Sawlog", unit: "bd ft", full: "Net sawlog volume of sawtimber trees, International ¼-in rule, on forest land", snum: 20, derived:false, hue:"yellow" },
+  area:           { title: "Forest land area", short:"Area", unit: "acres", full: "Area of forest land, on forest land", snum: 2, derived:false, hue:"violet", noRate:true },
+  mortality_rate: { title: "Mortality rate", short:"Mort. rate", unit: "%/yr", full: "Annual mortality volume as a percent of live volume in the same stand-size class", derived:true, hue:"red", noRate:true }
+};
+const METRIC_ORDER = ["inventory_year","volume","biomass","growth","removals","mortality","sawlog","area","mortality_rate"];
+
+// Each metric gets its own intuitive single-hue ramp (blue=volume, green=biomass,
+// aqua=growth, orange=removals, red=mortality, yellow=sawlog, violet=area) instead
+// of one generic blue scale for everything. Derived from the dataviz skill's
+// documented categorical anchors via OKLCH (same hue, gamut-aware chroma at each
+// lightness step) rather than eyeballed -- see build notes in the chat.
+const SEQ_RAMPS = {
+  blue:   ["#e9eff8","#cdddf3","#afccf3","#8ebaf4","#6ca8f6","#4995f4","#2b82ea","#2e72c6","#3163a2","#315481","#284468","#1f3553","#15273e"],
+  green:  ["#dcf8d9","#a0f599","#64eb5c","#49d943","#37c632","#2fb12a","#309c2b","#33872f","#357231","#345e31","#2b4d28","#213c1f","#172d15"],
+  aqua:   ["#d7f8e6","#90f4c4","#65e6ad","#4ad39b","#37c18a","#30ad7b","#30986e","#348461","#367055","#345c49","#2b4b3c","#213b2e","#172b22"],
+  orange: ["#f8ece7","#f4d4c9","#f4baa6","#f59e7f","#f77f52","#ee6228","#d15929","#b2522d","#944b2f","#77432f","#613727","#4c2a1e","#391e14"],
+  red:    ["#f8ebea","#f4d3d0","#f4b9b3","#f59b94","#f77b74","#f65552","#e7353b","#c53939","#a33a38","#823835","#6a2e2b","#542321","#3f1917"],
+  yellow: ["#f8edde","#f4d7b0","#f3bf75","#eba941","#d79830","#c18829","#aa782a","#926a2e","#7a5c30","#644e30","#514028","#40321e","#2f2415"],
+  violet: ["#ededf8","#d8d9f3","#c3c5f3","#afaff4","#9b99f6","#8983f4","#796cee","#6957e2","#5b44cf","#4c40a1","#3d3582","#302968","#231d4f"]
+};
+
+// Static US Census/reference land area, in acres, whole-state total (land only,
+// excludes water) -- used only for the "per acre of whole state" density view.
+// Split-region labels (AK-Coastal etc.) share their parent state's total acreage,
+// since the regional split of total land area isn't something FIA reports.
+const STATE_LAND_ACRES = {"AL":32412800,"AK":376576000,"AZ":72700160,"AR":33302400,"CA":99698560,"CO":66330880,"CT":3098880,"DE":1247360,"FL":34320000,"GA":36808320,"HI":4110720,"ID":52891520,"IL":35532160,"IN":22928640,"IA":35748480,"KS":52325760,"KY":25271040,"LA":27650560,"ME":19739520,"MD":6212480,"MA":4992000,"MI":36184960,"MN":50961280,"MS":30030720,"MO":43994880,"MT":93149440,"NE":49167360,"NV":70259840,"NH":5729920,"NJ":4706560,"NM":77630720,"NY":30160640,"NC":31115520,"ND":44160640,"OH":26150400,"OK":43900800,"OR":61432320,"PA":28635520,"RI":661760,"SC":19239040,"SD":48519040,"TN":26390400,"TX":167188480,"UT":52588800,"VT":5898880,"VA":25273600,"WA":42531840,"WV":15384320,"WI":34661120,"WY":62139520,"AK-Coastal":376576000,"AK-Interior":376576000,"TX-East":167188480,"TX-West":167188480};
+
+/* ---------------- helpers ---------------- */
+function compact(n) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  const sign = n < 0 ? "-" : "";
+  n = Math.abs(n);
+  if (n >= 1e9) return sign + (n/1e9).toFixed(n>=1e11?0:1) + "B";
+  if (n >= 1e6) return sign + (n/1e6).toFixed(n>=1e8?0:1) + "M";
+  if (n >= 1e3) return sign + (n/1e3).toFixed(n>=1e5?0:1) + "K";
+  return sign + n.toFixed(1);
+}
+function fmtFull(n) { return Math.round(n).toLocaleString("en-US"); }
+// FIA's "report_years" is a semicolon-joined list of every year folded into the
+// current rolling-average evaluation (e.g. "2019;2020;...;2025") -- collapse
+// it to a plain range (or a single year, for states surveyed only once) since
+// that's what "the current inventory cycle" means to a reader.
+function formatReportYears(raw) {
+  if (!raw) return "unknown";
+  const years = raw.split(";").filter(Boolean);
+  if (years.length === 1) return years[0];
+  return years[0] + "–" + years[years.length - 1];
+}
+function reportYearsFor(state) {
+  const rows = byState(state);
+  return rows.length ? rows[0].report_years : null;
+}
+// The single representative year for a "latest inventory year" view -- always
+// the newest year in the range (a 2014-2022 eval and a 2017-2022 eval both
+// read as 2022), matching how FIA's own DataMart labels an evaluation's currency.
+function latestYear(reportYearsRaw) {
+  if (!reportYearsRaw) return null;
+  const years = reportYearsRaw.split(";").filter(Boolean).map(Number);
+  return years.length ? Math.max(...years) : null;
+}
+// Precise (non-compacted) formatter used in tooltips and the table: per-acre
+// and rate values are small decimals and would round away to nothing under
+// fmtFull's integer rounding, so they get 1-2 decimal places instead.
+function fmtPrecise(n, metricKey, viewMode) {
+  if (n === null || n === undefined || isNaN(n)) return "—";
+  const info = METRIC_INFO[metricKey];
+  if (info.isYear) return String(Math.round(n));
+  if (info.derived) return n.toFixed(2) + "%";
+  if (viewMode && viewMode !== "total" && !info.noRate) return n.toLocaleString("en-US", {maximumFractionDigits: 2});
+  return fmtFull(n);
+}
+function byState(state) { return RAW.filter(r => r.state === state); }
+function byMetricRaw(rows, metric) {
+  const m = {};
+  rows.filter(r => r.metric === metric).forEach(r => m[r.stand_size_class] = r);
+  return CLASS_ORDER.filter(c => m[c]).map(c => m[c]);
+}
+function totalForestAcres(state) {
+  return byMetricRaw(byState(state), "area").reduce((a,r) => a + r.estimate, 0);
+}
+function unitFor(metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  if (info.noRate || viewMode === "total") return info.unit;
+  return info.unit + "/acre";
+}
+// viewMode: "total" | "per_forest_acre" (divide each class by that class's OWN
+// forest acreage -- a true stocking-density comparison across stand types) |
+// "per_state_acre" (divide by the state's whole land area -- a coarser share-
+// of-the-landscape view). Ignored for derived/area metrics (info.noRate).
+function classRowsForMetric(state, metricKey, viewMode) {
+  if (METRIC_INFO[metricKey].isYear) return []; // no stand-size breakdown for a single year value
+  const rows = byState(state);
+  let base;
+  if (metricKey === "mortality_rate") {
+    const vol = {}; byMetricRaw(rows, "volume").forEach(r => vol[r.stand_size_class] = r.estimate);
+    base = byMetricRaw(rows, "mortality").filter(r => vol[r.stand_size_class] > 0).map(r => ({
+      stand_size_class: r.stand_size_class, estimate: r.estimate / vol[r.stand_size_class] * 100,
+      se: 0, se_percent: 0, plot_count: r.plot_count
+    }));
+  } else {
+    base = byMetricRaw(rows, metricKey);
+  }
+  const info = METRIC_INFO[metricKey];
+  if (info.noRate || !viewMode || viewMode === "total") return base;
+
+  if (viewMode === "per_forest_acre") {
+    const area = {}; byMetricRaw(rows, "area").forEach(r => area[r.stand_size_class] = r.estimate);
+    return base.filter(r => area[r.stand_size_class] > 0).map(r => ({
+      ...r, estimate: r.estimate / area[r.stand_size_class], se: r.se / area[r.stand_size_class]
+    }));
+  }
+  if (viewMode === "per_state_acre") {
+    const denom = STATE_LAND_ACRES[state];
+    if (!denom) return base;
+    return base.map(r => ({ ...r, estimate: r.estimate / denom, se: r.se / denom }));
+  }
+  return base;
+}
+function stateTotal(state, metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  if (info.isYear) return latestYear(reportYearsFor(state));
+  if (metricKey === "mortality_rate") {
+    const totVol = byMetricRaw(byState(state), "volume").reduce((a,r) => a + r.estimate, 0);
+    const totMor = byMetricRaw(byState(state), "mortality").reduce((a,r) => a + r.estimate, 0);
+    return totVol > 0 ? totMor / totVol * 100 : null;
+  }
+  const rawRows = byMetricRaw(byState(state), metricKey);
+  if (!rawRows.length) return null;
+  const rawTotal = rawRows.reduce((a,r) => a + r.estimate, 0);
+  if (info.noRate || !viewMode || viewMode === "total") return rawTotal;
+  if (viewMode === "per_forest_acre") {
+    const acres = totalForestAcres(state);
+    return acres > 0 ? rawTotal / acres : null;
+  }
+  if (viewMode === "per_state_acre") {
+    const denom = STATE_LAND_ACRES[state];
+    return denom ? rawTotal / denom : null;
+  }
+  return rawTotal;
+}
+
+/* ---------------- county data (lazy-loaded per state) ---------------- */
+// The national county topology and each state's county-level FIA figures are
+// published as separate files alongside this page (not embedded inline) --
+// fetched only when a viewer actually drills into a state, since all US
+// counties combined would otherwise bloat every page load for a feature most
+// visits never use. Same-origin relative fetch, not a call to FIADB-API.
+let countyTopoPromise = null;
+function getCountyTopo() {
+  if (!countyTopoPromise) countyTopoPromise = fetch("counties-topo.json").then(r => r.json());
+  return countyTopoPromise;
+}
+const countyDataCache = {};
+function getCountyData(state) {
+  if (countyDataCache[state]) return Promise.resolve(countyDataCache[state]);
+  return fetch("county_json/" + state + ".json")
+    .then(r => { if (!r.ok) throw new Error("no county data for " + state); return r.json(); })
+    .then(rows => { countyDataCache[state] = rows; return rows; });
+}
+function countyByMetric(countyRows, metric) {
+  return countyRows.filter(r => r.metric === metric);
+}
+// One row per county for metricKey, summed across stand-size classes, in the
+// current viewMode. "per_state_acre" has no meaningful county-level analogue
+// (dividing a county's total by the WHOLE state's acreage isn't a density),
+// so it falls back to per-county forest-acre density instead, noted in the UI.
+function countyTotalsForMetric(countyRows, metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  if (info.isYear) {
+    const byC = {};
+    countyRows.forEach(r => {
+      const y = latestYear(r.report_years);
+      if (y === null) return;
+      if (!byC[r.county_fips] || y > byC[r.county_fips].estimate) {
+        byC[r.county_fips] = { county_fips: r.county_fips, county_name: r.county_name, estimate: y, plot_count: r.plot_count, report_years: r.report_years };
+      }
+    });
+    return Object.values(byC);
+  }
+  const byCounty = {};
+  function add(fips, name, val) {
+    if (!byCounty[fips]) byCounty[fips] = { county_fips: fips, county_name: name, estimate: 0, plot_count: 0 };
+    byCounty[fips].estimate += val;
+  }
+  if (metricKey === "mortality_rate") {
+    const vol = {}; countyByMetric(countyRows, "volume").forEach(r => { vol[r.county_fips] = (vol[r.county_fips]||0) + r.estimate; });
+    const byC = {};
+    countyByMetric(countyRows, "mortality").forEach(r => {
+      byC[r.county_fips] = byC[r.county_fips] || { county_fips: r.county_fips, county_name: r.county_name, mort: 0, plot_count: 0 };
+      byC[r.county_fips].mort += r.estimate; byC[r.county_fips].plot_count += r.plot_count;
+    });
+    return Object.values(byC).filter(c => vol[c.county_fips] > 0).map(c => ({
+      county_fips: c.county_fips, county_name: c.county_name, estimate: c.mort / vol[c.county_fips] * 100, plot_count: c.plot_count
+    }));
+  }
+  const rows = countyByMetric(countyRows, metricKey);
+  const acc = {};
+  rows.forEach(r => {
+    acc[r.county_fips] = acc[r.county_fips] || { county_fips: r.county_fips, county_name: r.county_name, estimate: 0, plot_count: 0, report_years: r.report_years };
+    acc[r.county_fips].estimate += r.estimate; acc[r.county_fips].plot_count += r.plot_count;
+  });
+  let list = Object.values(acc);
+  if (info.noRate || !viewMode || viewMode === "total") return list;
+  const areaByCounty = {};
+  countyByMetric(countyRows, "area").forEach(r => { areaByCounty[r.county_fips] = (areaByCounty[r.county_fips]||0) + r.estimate; });
+  return list.filter(c => areaByCounty[c.county_fips] > 0).map(c => ({ ...c, estimate: c.estimate / areaByCounty[c.county_fips] }));
+}
+
+/* ---------------- CSV / download ---------------- */
+function csvEscape(v) {
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s;
+}
+function rowsToCsv(headers, rows) {
+  return [headers.map(csvEscape).join(",")].concat(rows.map(r => r.map(csvEscape).join(","))).join("\r\n");
+}
+let toastTimer = null;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+function saveFile(filename, data, mime) {
+  try {
+    const blob = (data instanceof Blob) ? data : new Blob([data], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    toast("Saved.");
+  } catch (err) {
+    toast("Couldn't save that file.");
+  }
+}
+
+/* ---------------- tooltip ---------------- */
+const tip = document.getElementById("tooltip");
+function showTip(evt, node) { tip.innerHTML = ""; tip.appendChild(node); tip.classList.add("show"); moveTip(evt); }
+function moveTip(evt) { tip.style.left = evt.clientX + "px"; tip.style.top = evt.clientY + "px"; }
+function hideTip() { tip.classList.remove("show"); }
+document.addEventListener("pointermove", (e) => { if (tip.classList.contains("show")) moveTip(e); });
+
+/* ---------------- bar chart ---------------- */
+const SVG_NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs) { const e = document.createElementNS(SVG_NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); return e; }
+
+function buildBarChart(rows, opts) {
+  const W = 900, H = 230;
+  const padL = 6, padR = 6, padT = 10, padB = 28;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const maxVal = Math.max(1, ...rows.map(r => r.estimate + (opts.showError ? r.se : 0)));
+  const niceMax = maxVal * 1.18;
+  const svg = el("svg", { class: "chart", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.ariaLabel || "" });
+
+  for (let i = 0; i <= 3; i++) {
+    const y = padT + plotH - (i/3) * plotH;
+    svg.appendChild(el("line", { x1: padL, x2: W - padR, y1: y, y2: y, class: i === 0 ? "baseline" : "gridline" }));
+    const g = el("text", { x: padL, y: y - 4, class: "axis-label" });
+    g.textContent = opts.axisFmt((i/3) * niceMax);
+    svg.appendChild(g);
+  }
+
+  const n = rows.length || 1;
+  const slot = plotW / n;
+  const barW = Math.min(70, slot * 0.42);
+
+  rows.forEach((r, i) => {
+    const cx = padL + slot * (i + 0.5);
+    const barH = (r.estimate / niceMax) * plotH;
+    const y = padT + plotH - barH;
+    const color = CLASS_COLOR[r.stand_size_class] || "var(--nonstocked)";
+
+    svg.appendChild(el("rect", { x: cx - barW/2, y: y, width: barW, height: Math.max(barH, 1), rx: 4, ry: 4, fill: color, class: "bar" }));
+
+    if (opts.showError && r.se > 0) {
+      const seH = (r.se / niceMax) * plotH;
+      const yTop = y - seH, yBot = Math.min(y + seH, padT + plotH);
+      svg.appendChild(el("line", { x1: cx, x2: cx, y1: yTop, y2: yBot, class: "errorbar" }));
+      const cap = 6;
+      [yTop, yBot].forEach(yy => svg.appendChild(el("line", { x1: cx - cap/2, x2: cx + cap/2, y1: yy, y2: yy, class: "errorbar" })));
+    }
+
+    const lbl = el("text", { x: cx, y: y - 10, "text-anchor": "middle", class: "bar-label" });
+    lbl.textContent = opts.valueFmt(r.estimate);
+    svg.appendChild(lbl);
+
+    const cat = el("text", { x: cx, y: H - 8, "text-anchor": "middle", class: "cat-label" });
+    cat.textContent = r.stand_size_class.replace(" diameter", "");
+    svg.appendChild(cat);
+
+    const hit = el("rect", { x: cx - slot/2, y: padT, width: slot, height: plotH, fill: "transparent", style: "cursor:pointer" });
+    const bar = svg.lastChild;
+    hit.addEventListener("pointermove", (evt) => { showTip(evt, opts.tooltip(r)); });
+    hit.addEventListener("pointerleave", hideTip);
+    svg.appendChild(hit);
+  });
+  return svg;
+}
+
+function tooltipNode(title, valueText, subText) {
+  const wrap = document.createElement("div");
+  const t = document.createElement("div"); t.textContent = title;
+  const v = document.createElement("div"); v.className = "tt-value"; v.textContent = valueText;
+  const s = document.createElement("div"); s.className = "tt-sub"; s.textContent = subText;
+  wrap.append(t, v, s);
+  return wrap;
+}
+
+/* ---------------- theme toggle ---------------- */
+document.getElementById("themeToggle").addEventListener("click", () => {
+  const root = document.documentElement;
+  const isDark = root.getAttribute("data-theme") === "dark" ||
+    (!root.getAttribute("data-theme") && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const next = isDark ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  try { localStorage.setItem("fia-theme", next); } catch (e) {}
+});
+
+/* ---------------- controls setup ---------------- */
+const metricSel = document.getElementById("metricSelect");
+METRIC_ORDER.forEach(k => {
+  const opt = document.createElement("option"); opt.value = k; opt.textContent = METRIC_INFO[k].title;
+  metricSel.appendChild(opt);
+});
+metricSel.value = "inventory_year";
+
+const stateSel = document.getElementById("stateSelect");
+const labels = Object.keys(STATE_META).filter(l => RAW.some(r => r.state === l));
+labels.sort((a,b) => STATE_META[a].name.localeCompare(STATE_META[b].name));
+labels.forEach(l => { const opt = document.createElement("option"); opt.value = l; opt.textContent = STATE_META[l].name; stateSel.appendChild(opt); });
+stateSel.value = labels.includes("MS") ? "MS" : labels[0];
+
+const viewModeSel = document.getElementById("viewModeSelect");
+
+function currentView() { return viewModeSel.disabled ? "total" : viewModeSel.value; }
+function refreshViewModeAvailability() {
+  const info = METRIC_INFO[metricSel.value];
+  viewModeSel.disabled = !!info.noRate;
+  if (info.noRate) viewModeSel.value = "total";
+}
+function renderAll() {
+  refreshViewModeAvailability();
+  if (countyModeState) {
+    refreshCountyView();
+  } else {
+    renderMap(metricSel.value, currentView());
+  }
+  renderDetail(stateSel.value, metricSel.value, currentView());
+  renderTiles(stateSel.value, currentView());
+  renderCaveat(stateSel.value, metricSel.value);
+}
+
+metricSel.addEventListener("change", renderAll);
+viewModeSel.addEventListener("change", renderAll);
+stateSel.addEventListener("change", () => {
+  renderDetail(stateSel.value, metricSel.value, currentView());
+  renderTiles(stateSel.value, currentView());
+  renderCaveat(stateSel.value, metricSel.value);
+  renderTable(stateSel.value);
+  renderInventoryBadge(stateSel.value);
+  highlightMapState(stateSel.value);
+  enterCountyMode(stateSel.value);
+});
+
+/* ---------------- glossary (static) ---------------- */
+(function renderGlossary() {
+  const grid = document.getElementById("glossaryGrid");
+  CLASS_ORDER.forEach(c => {
+    const item = document.createElement("div"); item.className = "glossary-term";
+    const dot = document.createElement("span"); dot.className = "glossary-dot"; dot.style.background = CLASS_COLOR[c];
+    const body = document.createElement("div");
+    const name = document.createElement("div"); name.className = "glossary-name";
+    name.textContent = c + " ";
+    const alias = document.createElement("span"); alias.className = "glossary-alias"; alias.textContent = "(" + CLASS_ALIAS[c] + ")";
+    name.appendChild(alias);
+    const def = document.createElement("div"); def.className = "glossary-def"; def.textContent = CLASS_DEF[c];
+    body.append(name, def);
+    item.append(dot, body);
+    grid.appendChild(item);
+  });
+})();
+
+/* ---------------- map ---------------- */
+let mapZoom = null;
+let statesSel = null;
+let stateFeatures = null;
+const mapSvg = d3.select("#mapSvg");
+const mapG = mapSvg.append("g").attr("id", "mapZoomG");
+const geoPathGen = d3.geoPath();
+let countyG = null;
+let labelsG = null;
+
+(function initMap() {
+  const geo = topojson.feature(TOPO, TOPO.objects.states);
+  stateFeatures = geo.features;
+  statesSel = mapG.selectAll("path.map-state")
+    .data(geo.features)
+    .join("path")
+    .attr("class", "map-state")
+    .attr("d", geoPathGen)
+    .attr("data-fips", d => d.id);
+
+  // Appended after the state paths so county shapes paint on top of (visually
+  // replace) the dimmed state polygon once a viewer drills into it.
+  countyG = mapG.append("g").attr("id", "countyLayer");
+
+  // Postal-code labels at each state's centroid, on top of everything so
+  // they stay legible over any fill. Hidden while zoomed into one state's
+  // counties (see enter/exitCountyMode) since 49 other labels crowding a
+  // zoomed-in view helps no one.
+  labelsG = mapG.append("g").attr("id", "stateLabelsG");
+  labelsG.selectAll("text.state-label")
+    .data(stateFeatures.filter(d => FIPS_TO_LABEL[d.id]))
+    .join("text")
+    .attr("class", "state-label")
+    .attr("x", d => geoPathGen.centroid(d)[0])
+    .attr("y", d => geoPathGen.centroid(d)[1])
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "middle")
+    .attr("pointer-events", "none")
+    .text(d => FIPS_TO_LABEL[d.id]);
+
+  mapZoom = d3.zoom().scaleExtent([1, 8]).on("zoom", (event) => mapG.attr("transform", event.transform));
+  mapSvg.call(mapZoom);
+
+  statesSel.on("pointermove", function(event, d) {
+    const label = FIPS_TO_LABEL[d.id];
+    d3.select(this).classed("hover", true);
+    if (!label) { showTip(event, tooltipNode(d.properties.name, "No FIA data", "")); return; }
+    const metric = metricSel.value, view = currentView();
+    const val = stateTotal(label, metric, view);
+    const info = METRIC_INFO[metric];
+    const years = reportYearsFor(label);
+    const blended = BLENDED_VINTAGE_STATES.has(label) ? " (newest available per county; some are older)" : "";
+    const note = info.isYear ? (blended || info.title) : info.title + (years ? " · inventory " + formatReportYears(years) + blended : "");
+    showTip(event, tooltipNode(STATE_META[label].name, val === null ? "No data" : (fmtPrecise(val, metric, view) + " " + unitFor(metric, view)), note));
+  }).on("pointerleave", function() { d3.select(this).classed("hover", false); hideTip(); })
+    .on("click", function(event, d) {
+      const label = FIPS_TO_LABEL[d.id];
+      if (!label) return;
+      stateSel.value = label;
+      stateSel.dispatchEvent(new Event("change"));
+    });
+})();
+
+function highlightMapState(state) {
+  statesSel.classed("selected", d => FIPS_TO_LABEL[d.id] === state);
+}
+
+document.getElementById("resetZoomBtn").addEventListener("click", () => {
+  mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
+});
+document.getElementById("backToUsBtn").addEventListener("click", exitCountyMode);
+// Fixed light-mode ink, independent of whatever theme is active on screen --
+// a downloaded SVG is a standalone document with no page <style> block behind
+// it, so anything referencing var(--...) or a CSS class (the live map's own
+// stroke/no-data fill both do) would silently break once opened outside this
+// page. Print-style light-on-white also just travels better into a report or
+// a slide than whatever theme the viewer happened to be in.
+const EXPORT_INK = { bg: "#ffffff", ink: "#14170f", secondary: "#52514e", muted: "#898781", nodata: "#dedcd3", stroke: "#ffffff", rule: "#e1e0d9" };
+const EXPORT_FONT = "'Source Sans Pro','Helvetica Neue',Helvetica,Arial,sans-serif";
+
+function wrapTextLines(text, maxChars) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  words.forEach(w => {
+    const next = cur ? cur + " " + w : w;
+    if (next.length > maxChars && cur) { lines.push(cur); cur = w; } else { cur = next; }
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function svgEl(tag, attrs, text) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// Builds a self-contained, annotated SVG (title, description, legend, source
+// line) around whatever the map currently shows -- the national US choropleth
+// or a county drill-down, at its current pan/zoom -- so the exported file
+// reads on its own in a report or a slide, not just as bare shapes.
+function buildMapExportSvg() {
+  const title = document.getElementById("mapTitle").textContent;
+  const sub = document.getElementById("mapSub").textContent;
+  const caveatEl = document.getElementById("caveat");
+  const caveatText = caveatEl.classList.contains("show") ? caveatEl.textContent : "";
+
+  const mapW = 975, mapH = 610, pad = 24;
+  const subLines = wrapTextLines(sub, 118);
+  const caveatLines = caveatText ? wrapTextLines(caveatText, 118) : [];
+  const titleY = pad + 18;
+  const subStartY = titleY + 24;
+  const subH = subLines.length * 16;
+  const caveatStartY = subStartY + subH + 4;
+  const caveatH = caveatLines.length * 15;
+  const headerH = (caveatStartY + caveatH + 14) - pad;
+  const legendH = 44;
+  const footerH = 26;
+  const totalW = mapW + pad * 2;
+  const totalH = pad + headerH + mapH + legendH + footerH + pad;
+
+  const out = svgEl("svg", {
+    viewBox: `0 0 ${totalW} ${totalH}`,
+    width: totalW, height: totalH, "font-family": EXPORT_FONT
+  });
+  out.appendChild(svgEl("rect", { x: 0, y: 0, width: totalW, height: totalH, fill: EXPORT_INK.bg }));
+  out.appendChild(svgEl("text", { x: pad, y: titleY, "font-size": 19, "font-weight": 700, fill: EXPORT_INK.ink }, title));
+  subLines.forEach((line, i) => {
+    out.appendChild(svgEl("text", { x: pad, y: subStartY + i * 16, "font-size": 12.5, fill: EXPORT_INK.secondary }, line));
+  });
+  caveatLines.forEach((line, i) => {
+    out.appendChild(svgEl("text", { x: pad, y: caveatStartY + i * 15, "font-size": 11.5, fill: "#8a5a1c" }, line));
+  });
+  out.appendChild(svgEl("line", { x1: pad, x2: totalW - pad, y1: pad + headerH - 6, y2: pad + headerH - 6, stroke: EXPORT_INK.rule, "stroke-width": 1 }));
+
+  // --- map content, cloned at its current pan/zoom, colors inlined ---
+  const mapGroup = svgEl("g", { transform: `translate(${pad}, ${pad + headerH})` });
+  const clip = svgEl("clipPath", { id: "export-clip" });
+  clip.appendChild(svgEl("rect", { x: 0, y: 0, width: mapW, height: mapH }));
+  mapGroup.appendChild(clip);
+  const zoomG = document.getElementById("mapZoomG").cloneNode(true);
+  zoomG.querySelectorAll("path.map-state, path.county-shape").forEach(p => {
+    const fill = p.getAttribute("fill");
+    p.setAttribute("fill", fill === "var(--map-nodata)" ? EXPORT_INK.nodata : (fill || EXPORT_INK.nodata));
+    p.setAttribute("stroke", EXPORT_INK.stroke);
+    p.setAttribute("stroke-width", "0.6");
+    p.removeAttribute("class");
+  });
+  // State-name labels rely on the .state-label CSS class, which doesn't exist
+  // in a standalone SVG file -- inline the same look as explicit attributes.
+  zoomG.querySelectorAll("text.state-label").forEach(t => {
+    t.setAttribute("font-size", "9");
+    t.setAttribute("font-weight", "600");
+    t.setAttribute("fill", "#14170f");
+    t.setAttribute("stroke", "#ffffff");
+    t.setAttribute("stroke-width", "2.5");
+    t.setAttribute("paint-order", "stroke fill");
+    t.removeAttribute("class");
+  });
+  const contentWrap = svgEl("g", { "clip-path": "url(#export-clip)" });
+  contentWrap.appendChild(zoomG);
+  mapGroup.appendChild(contentWrap);
+  out.appendChild(mapGroup);
+
+  // --- legend, redrawn as plain SVG shapes from whichever renderer last ran ---
+  const legendY = pad + headerH + mapH + 26;
+  if (currentLegendData) {
+    const L = currentLegendData;
+    let x = pad;
+    if (L.type === "discrete") {
+      L.distinct.forEach((v, i) => {
+        out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 13, height: 13, rx: 3, fill: L.steps[i] }));
+        const label = fmtPrecise(v, L.metricKey, L.viewMode) + (L.unit ? " " + L.unit : "");
+        const t = svgEl("text", { x: x + 18, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, label);
+        out.appendChild(t);
+        x += 18 + label.length * 6.2 + 16;
+      });
+    } else {
+      const loText = fmtPrecise(L.domainMin, L.metricKey, L.viewMode) + " " + L.unit;
+      out.appendChild(svgEl("text", { x, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, loText));
+      x += loText.length * 6.2 + 10;
+      L.ramp.forEach(c => { out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 14, height: 10, fill: c })); x += 14; });
+      x += 10;
+      const hiText = fmtPrecise(L.domainMax, L.metricKey, L.viewMode) + " " + L.unit;
+      out.appendChild(svgEl("text", { x, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, hiText));
+      x += hiText.length * 6.2 + 20;
+    }
+    out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 11, height: 11, rx: 3, fill: EXPORT_INK.nodata }));
+    out.appendChild(svgEl("text", { x: x + 16, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, "No data"));
+  }
+
+  // --- footer / source line ---
+  const footerY = totalH - pad + 4;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  out.appendChild(svgEl("text", { x: pad, y: footerY, "font-size": 10.5, fill: EXPORT_INK.muted },
+    "Source: USDA Forest Service FIADB-API (fiadb-api/fullreport) · Forest Stand Profile · exported " + dateStr));
+
+  return out;
+}
+
+// "Download map (SVG)" opens a preview of the exact annotated file first --
+// title, legend, and caveat text baked in -- rather than saving blind.
+let pendingExportSvg = null;
+function openMapPreview() {
+  pendingExportSvg = buildMapExportSvg();
+  const body = document.getElementById("exportPreviewBody");
+  body.innerHTML = "";
+  body.appendChild(pendingExportSvg.cloneNode(true));
+  document.getElementById("exportPreviewOverlay").hidden = false;
+}
+function closeMapPreview() {
+  document.getElementById("exportPreviewOverlay").hidden = true;
+  pendingExportSvg = null;
+}
+document.getElementById("downloadMapBtn").addEventListener("click", openMapPreview);
+document.getElementById("exportPreviewClose").addEventListener("click", closeMapPreview);
+document.getElementById("exportPreviewCancel").addEventListener("click", closeMapPreview);
+document.getElementById("exportPreviewOverlay").addEventListener("click", (e) => {
+  if (e.target.id === "exportPreviewOverlay") closeMapPreview();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && !document.getElementById("exportPreviewOverlay").hidden) closeMapPreview();
+});
+document.getElementById("exportPreviewConfirm").addEventListener("click", () => {
+  if (!pendingExportSvg) return;
+  const metric = metricSel.value;
+  const stateSuffix = countyModeState ? "_" + countyModeState.replace(/\s+/g, "_") : "";
+  const serializer = new XMLSerializer();
+  const src = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(pendingExportSvg);
+  saveFile("fia_map_" + metric + stateSuffix + ".svg", src, "image/svg+xml");
+  closeMapPreview();
+});
+
+// Two color-scale/legend styles share the map and county-map renderers:
+// a continuous quantized gradient for real quantities (13 ramp steps across
+// a min-max range), and a discrete swatch-per-value scale for the inventory-
+// year view, which only ever has a handful of distinct years on screen --
+// exact labeled swatches ("2019", "2025", ...) read far better there than a
+// gradient bar, since a gradient implies continuity a set of 5-6 whole years
+// doesn't have.
+function buildDiscreteYearScale(values, ramp) {
+  const distinct = Array.from(new Set(values)).sort((a, b) => a - b);
+  const n = distinct.length;
+  const steps = n <= 1
+    ? [ramp[ramp.length - 1]]
+    : distinct.map((_, i) => ramp[Math.round(i * (ramp.length - 1) / (n - 1))]);
+  const colorByValue = {};
+  distinct.forEach((v, i) => { colorByValue[v] = steps[i]; });
+  return { scale: v => colorByValue[v], distinct, steps };
+}
+function renderLegendDiscrete(legend, distinct, steps, metricKey, viewMode, unit) {
+  legend.innerHTML = "";
+  distinct.forEach((v, i) => {
+    const item = document.createElement("div"); item.className = "map-legend-swatch-item";
+    const sw = document.createElement("span"); sw.className = "map-legend-swatch"; sw.style.background = steps[i];
+    const label = document.createElement("span"); label.textContent = fmtPrecise(v, metricKey, viewMode) + (unit ? " " + unit : "");
+    item.append(sw, label);
+    legend.appendChild(item);
+  });
+  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
+  const i2 = document.createElement("i"); const t2 = document.createElement("span"); t2.textContent = "No data";
+  nodata.append(i2, t2);
+  legend.appendChild(nodata);
+}
+function renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit) {
+  legend.innerHTML = "";
+  const lo = document.createElement("span"); lo.textContent = fmtPrecise(domainMin, metricKey, viewMode) + " " + unit;
+  const rampEl = document.createElement("div"); rampEl.className = "map-legend-ramp";
+  ramp.forEach(c => { const s = document.createElement("span"); s.style.background = c; rampEl.appendChild(s); });
+  const hi = document.createElement("span"); hi.textContent = fmtPrecise(domainMax, metricKey, viewMode) + " " + unit;
+  const nodata = document.createElement("div"); nodata.className = "map-legend-nodata";
+  const i2 = document.createElement("i"); const t2 = document.createElement("span"); t2.textContent = "No data";
+  nodata.append(i2, t2);
+  legend.append(lo, rampEl, hi, nodata);
+}
+
+function renderMap(metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  const unit = unitFor(metricKey, viewMode);
+  const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of whole state" : "";
+  document.getElementById("mapTitle").textContent = info.title + " by state" + viewLabel;
+  document.getElementById("mapSub").textContent = info.full;
+
+  const ramp = SEQ_RAMPS[info.hue];
+  const mappedLabels = Object.values(FIPS_TO_LABEL);
+  const values = mappedLabels.map(l => stateTotal(l, metricKey, viewMode)).filter(v => v !== null && v > 0);
+  const legend = document.getElementById("mapLegend");
+  let scale;
+  if (info.isYear) {
+    const d = buildDiscreteYearScale(values, ramp);
+    scale = d.scale;
+    renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+    currentLegendData = { type: "discrete", distinct: d.distinct, steps: d.steps, metricKey, viewMode, unit };
+  } else {
+    const domainMin = Math.min(...values), domainMax = Math.max(...values);
+    scale = d3.scaleQuantize().domain([domainMin, domainMax]).range(ramp);
+    renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+    currentLegendData = { type: "continuous", ramp, domainMin, domainMax, metricKey, viewMode, unit };
+  }
+
+  statesSel.attr("fill", d => {
+    const label = FIPS_TO_LABEL[d.id];
+    if (!label) return "var(--map-nodata)";
+    const v = stateTotal(label, metricKey, viewMode);
+    return (v === null || v <= 0) ? "var(--map-nodata)" : scale(v);
+  });
+}
+
+/* ---------------- tiles ---------------- */
+function renderTiles(state, viewMode) {
+  const tiles = document.getElementById("tiles");
+  tiles.innerHTML = "";
+  document.getElementById("tilesCardTitle").textContent =
+    viewMode === "per_forest_acre" ? "Per acre of that stand type" : viewMode === "per_state_acre" ? "Per acre of whole state" : "Headline totals";
+  METRIC_ORDER.forEach(key => {
+    const info = METRIC_INFO[key];
+    const effView = info.noRate ? "total" : viewMode;
+    const val = stateTotal(state, key, effView);
+    const div = document.createElement("div"); div.className = "tile" + (key === metricSel.value ? " active" : "");
+    div.tabIndex = 0;
+    const l = document.createElement("div"); l.className = "tile-label"; l.textContent = info.title;
+    const valwrap = document.createElement("div"); valwrap.className = "tile-valwrap";
+    const v = document.createElement("div"); v.className = "tile-value";
+    v.textContent = val === null ? "—" : (info.isYear ? String(Math.round(val)) : info.derived ? val.toFixed(2) + "%" : compact(val));
+    const u = document.createElement("div"); u.className = "tile-unit"; u.textContent = info.isYear ? "" : info.derived ? "/yr" : unitFor(key, effView);
+    valwrap.append(v, u);
+    div.append(l, valwrap);
+    div.addEventListener("click", () => { metricSel.value = key; renderAll(); });
+    tiles.appendChild(div);
+  });
+}
+
+/* ---------------- detail chart ---------------- */
+function renderDetail(state, metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  const unit = unitFor(metricKey, viewMode);
+  const host = document.getElementById("detailChartHost");
+  host.innerHTML = "";
+
+  if (info.isYear) {
+    document.getElementById("detailTitle").textContent = "Inventory currency — " + STATE_META[state].name;
+    document.getElementById("detailSub").textContent = info.full;
+    const years = reportYearsFor(state);
+    const note = document.createElement("div"); note.className = "empty-note";
+    note.textContent = years
+      ? STATE_META[state].name + "'s current FIA evaluation covers " + formatReportYears(years) +
+        (BLENDED_VINTAGE_STATES.has(state) ? " (blended by county — see the map and caveat above)." : ".")
+      : "No inventory year on file for " + STATE_META[state].name + ".";
+    host.appendChild(note);
+    return;
+  }
+
+  const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of whole state" : "";
+  document.getElementById("detailTitle").textContent = info.title + " by stand-size class" + viewLabel + " — " + STATE_META[state].name;
+  document.getElementById("detailSub").textContent = info.full + (viewMode === "per_forest_acre" ? ". Each bar is divided by that class's OWN forest acreage, so bars compare typical stocking density, not how much area each class covers." : "");
+  const rows = classRowsForMetric(state, metricKey, viewMode);
+  if (!rows.length) {
+    const note = document.createElement("div"); note.className = "empty-note";
+    note.textContent = info.title + " is unavailable for " + STATE_META[state].name + " (no growth-accounting evaluation in FIADB for this unit).";
+    host.appendChild(note);
+    return;
+  }
+  const valueFmt = info.derived ? (v => v.toFixed(1) + "%") : (viewMode !== "total" && !info.noRate ? (v => v.toLocaleString("en-US",{maximumFractionDigits:1})) : compact);
+  const axisFmt = valueFmt;
+  host.appendChild(buildBarChart(rows, {
+    showError: !info.derived,
+    valueFmt, axisFmt,
+    ariaLabel: info.title + " by stand-size class",
+    tooltip: (r) => tooltipNode(r.stand_size_class, fmtPrecise(r.estimate, metricKey, viewMode) + " " + unit,
+      info.derived ? "mortality ÷ live volume, same class" : (r.se > 0 ? ("± " + fmtPrecise(r.se, metricKey, viewMode) + " SE (" + r.se_percent.toFixed(1) + "%) · " + r.plot_count + " plots") : r.plot_count + " plots"))
+  }));
+
+  const legendRow = document.createElement("div"); legendRow.className = "legend";
+  rows.forEach(r => {
+    const item = document.createElement("div"); item.className = "legend-item";
+    const sw = document.createElement("span"); sw.className = "legend-swatch"; sw.style.background = CLASS_COLOR[r.stand_size_class];
+    const txt = document.createElement("span"); txt.textContent = r.stand_size_class;
+    item.append(sw, txt);
+    legendRow.appendChild(item);
+  });
+  host.appendChild(legendRow);
+}
+
+/* ---------------- county drill-down ---------------- */
+let countyModeState = null;   // label currently zoomed into, or null for the US view
+let countyFeaturesCache = null;
+let currentLegendData = null; // set by renderMap/renderCountyLayer, read by the SVG export builder
+
+function zoomTransformForBounds(bounds) {
+  const [[x0, y0], [x1, y1]] = bounds;
+  const width = 975, height = 610, pad = 0.85;
+  const w = Math.max(x1 - x0, 1), h = Math.max(y1 - y0, 1);
+  const scale = Math.max(1, Math.min(8, pad / Math.max(w / width, h / height)));
+  const tx = width / 2 - scale * (x0 + x1) / 2;
+  const ty = height / 2 - scale * (y0 + y1) / 2;
+  return d3.zoomIdentity.translate(tx, ty).scale(scale);
+}
+
+const viewModeOptPerForest = viewModeSel.querySelector('option[value="per_forest_acre"]');
+const viewModeOptPerState = viewModeSel.querySelector('option[value="per_state_acre"]');
+
+function enterCountyMode(state) {
+  const fips = STATE_FIPS[state];
+  if (!fips) return;
+  countyModeState = state;
+  document.getElementById("backToUsBtn").hidden = false;
+  labelsG.style("display", "none");
+
+  // "Per acre of that stand type" only means something next to a per-class
+  // breakdown (the state-level bar chart); the county map shows one summed
+  // total per county, so relabel it, and "per acre of whole state" has no
+  // per-county analogue at all (dividing one county by the WHOLE state's
+  // acreage isn't a density) -- rather than silently reusing the per-forest
+  // calculation for it, as this used to do, disable it outright and fall
+  // back to per-county forest density if it was selected.
+  viewModeOptPerForest.textContent = "Per acre of that county's forest";
+  viewModeOptPerState.textContent = "Per acre of whole state (state view only)";
+  viewModeOptPerState.disabled = true;
+  if (viewModeSel.value === "per_state_acre") viewModeSel.value = "per_forest_acre";
+
+  Promise.all([getCountyTopo(), getCountyData(state)])
+    .then(([topo, rows]) => {
+      if (countyModeState !== state) return; // superseded by another selection while loading
+      if (!countyFeaturesCache) countyFeaturesCache = topojson.feature(topo, topo.objects.counties).features;
+      const features = countyFeaturesCache.filter(d => String(d.id).slice(0, 2) === fips);
+
+      const stateFeature = stateFeatures.find(d => d.id === fips);
+      if (stateFeature) {
+        mapSvg.transition().duration(500).call(mapZoom.transform, zoomTransformForBounds(geoPathGen.bounds(stateFeature)));
+      }
+      // The focal state disappears entirely (its counties paint over it);
+      // every other state fades to a low-opacity backdrop rather than
+      // staying at full national-map intensity, so the zoomed county
+      // symbology reads as the actual subject -- on screen and in the
+      // exported SVG, which just clones this same DOM state.
+      statesSel.style("opacity", d => (d.id === fips ? 0 : 0.16));
+
+      renderCountyLayer(state, features, rows, metricSel.value, currentView());
+      renderCountyTable(state, rows, metricSel.value, currentView());
+    })
+    .catch(() => {
+      toast("No county-level data available for " + (STATE_META[state] ? STATE_META[state].name : state) + ".");
+      exitCountyMode();
+    });
+}
+
+function refreshCountyView() {
+  if (!countyModeState) return;
+  const state = countyModeState;
+  getCountyData(state).then(rows => {
+    const fips = STATE_FIPS[state];
+    const features = countyFeaturesCache ? countyFeaturesCache.filter(d => String(d.id).slice(0, 2) === fips) : [];
+    renderCountyLayer(state, features, rows, metricSel.value, currentView());
+    renderCountyTable(state, rows, metricSel.value, currentView());
+  });
+}
+
+function exitCountyMode() {
+  countyModeState = null;
+  countyG.selectAll("path.county-shape").remove();
+  statesSel.style("opacity", 1);
+  labelsG.style("display", null);
+  document.getElementById("backToUsBtn").hidden = true;
+  document.getElementById("countyTableSection").hidden = true;
+  mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
+  viewModeOptPerForest.textContent = "Per acre of that stand type";
+  viewModeOptPerState.textContent = "Per acre of whole state";
+  viewModeOptPerState.disabled = false;
+  renderMap(metricSel.value, currentView());
+}
+
+function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  const totals = countyTotalsForMetric(countyRows, metricKey, viewMode);
+  const byFips = {}; totals.forEach(t => byFips[t.county_fips] = t);
+
+  const values = totals.map(t => t.estimate).filter(v => v > 0);
+  const ramp = SEQ_RAMPS[info.hue];
+  const unit = unitFor(metricKey, viewMode);
+  const legend = document.getElementById("mapLegend");
+  let scale;
+  if (info.isYear) {
+    const d = buildDiscreteYearScale(values.length ? values : [0], ramp);
+    scale = d.scale;
+    renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+    currentLegendData = { type: "discrete", distinct: d.distinct, steps: d.steps, metricKey, viewMode, unit };
+  } else {
+    const domainMin = values.length ? Math.min(...values) : 0;
+    const domainMax = values.length ? Math.max(...values) : 1;
+    scale = d3.scaleQuantize().domain([domainMin === domainMax ? 0 : domainMin, domainMax || 1]).range(ramp);
+    renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+    currentLegendData = { type: "continuous", ramp, domainMin, domainMax, metricKey, viewMode, unit };
+  }
+
+  const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of that county's forest (no whole-county acreage on file)" : "";
+  document.getElementById("mapTitle").textContent = info.title + " by county — " + STATE_META[state].name + viewLabel;
+  document.getElementById("mapSub").textContent = info.full + (BLENDED_VINTAGE_STATES.has(state) ? " — counties here mix survey vintages; hover a county to see its own inventory years." : "");
+
+  countyG.selectAll("path.county-shape")
+    .data(features, d => d.id)
+    .join("path")
+    .attr("class", "map-state county-shape")
+    .attr("d", geoPathGen)
+    .attr("fill", d => {
+      const t = byFips[d.id];
+      return (!t || !(t.estimate > 0)) ? "var(--map-nodata)" : scale(t.estimate);
+    })
+    .on("pointermove", function(event, d) {
+      d3.select(this).classed("hover", true);
+      const t = byFips[d.id];
+      const name = t ? t.county_name : (d.properties && d.properties.name) || d.id;
+      let valueText, subText;
+      if (t) {
+        valueText = fmtPrecise(t.estimate, metricKey, viewMode) + " " + unitFor(metricKey, viewMode);
+        subText = t.report_years ? "Inventory " + formatReportYears(t.report_years) : info.title;
+      } else {
+        valueText = "No estimate here";
+        subText = "No FIA plots in this county, or this metric isn't available for its survey — not a gap in the pull";
+      }
+      showTip(event, tooltipNode(name + " County", valueText, subText));
+    })
+    .on("pointerleave", function() { d3.select(this).classed("hover", false); hideTip(); });
+}
+
+function renderCountyTable(state, countyRows, metricKey, viewMode) {
+  const info = METRIC_INFO[metricKey];
+  const totals = countyTotalsForMetric(countyRows, metricKey, viewMode).sort((a, b) => b.estimate - a.estimate);
+  const unit = unitFor(metricKey, viewMode);
+
+  document.getElementById("countyTableTitle").textContent = "By county — " + info.title + " — " + STATE_META[state].name;
+  document.getElementById("countyValueHeader").textContent = info.title;
+  const tbody = document.getElementById("county-table-body");
+  tbody.innerHTML = "";
+  totals.forEach(t => {
+    const tr = document.createElement("tr");
+    const tdName = document.createElement("td"); tdName.textContent = t.county_name;
+    const tdVal = document.createElement("td"); tdVal.textContent = fmtPrecise(t.estimate, metricKey, viewMode);
+    const tdUnit = document.createElement("td"); tdUnit.textContent = unit;
+    const tdN = document.createElement("td"); tdN.textContent = t.plot_count;
+    tr.append(tdName, tdVal, tdUnit, tdN);
+    tbody.appendChild(tr);
+  });
+  document.getElementById("countyTableSection").hidden = false;
+}
+
+document.getElementById("downloadCountyCsvBtn").addEventListener("click", () => {
+  if (!countyModeState) return;
+  const state = countyModeState;
+  getCountyData(state).then(rows => {
+    const headers = ["state", "county_fips", "county_name", "metric", "stand_size_class", "unit", "estimate", "se", "se_percent", "plot_count"];
+    const body = rows.map(r => [state, r.county_fips, r.county_name, r.metric, r.stand_size_class, METRIC_INFO[r.metric] ? METRIC_INFO[r.metric].unit : "", r.estimate, r.se, r.se_percent, r.plot_count]);
+    saveFile("fia_" + state.replace(/\s+/g, "_") + "_counties.csv", rowsToCsv(headers, body), "text/csv");
+  });
+});
+
+/* ---------------- inventory badge ---------------- */
+function renderInventoryBadge(state) {
+  const badge = document.getElementById("inventoryBadge");
+  badge.innerHTML = "";
+  const years = reportYearsFor(state);
+  if (!years) { badge.textContent = ""; return; }
+  const label = document.createElement("span"); label.textContent = "Current inventory: ";
+  const b = document.createElement("b"); b.textContent = formatReportYears(years);
+  badge.append(label, b);
+}
+
+/* ---------------- caveat ---------------- */
+function renderCaveat(state, metric) {
+  const cav = document.getElementById("caveat");
+  const lines = [];
+
+  const hasGrm = byState(state).some(r => r.metric === "mortality");
+  if (!hasGrm) {
+    lines.push(STATE_META[state].name + " has no growth-accounting-enabled evaluation in FIADB, so mortality, growth, and removals cannot be estimated through this endpoint for this unit. Volume, biomass, and sawlog stock are unaffected.");
+  }
+
+  if (BLENDED_VINTAGE_STATES.has(state)) {
+    lines.push(STATE_META[state].name + "'s FIA survey is split into regional evaluations at different vintages that geographically overlap. " +
+      "Every county here uses the newest survey that covers it, falling back to an older one only where the newer survey doesn't reach — " +
+      "so this total blends vintages rather than reflecting one single inventory year. Hover a county on the map below to see which years it's actually drawn from.");
+
+    if (hasGrm && (metric === "mortality" || metric === "growth" || metric === "removals")) {
+      lines.push("Most of the county map below will show \"No data\" for this metric: growth, removals, and mortality require plots visited more than once, and only a minority of " + STATE_META[state].name + "'s counties have that remeasurement history in either survey vintage — the rest were visited once, which is enough for volume, biomass, and area but not for a growth-accounting estimate.");
+    }
+  }
+
+  cav.innerHTML = "";
+  lines.forEach((t, i) => {
+    if (i > 0) cav.appendChild(document.createElement("br"));
+    cav.appendChild(document.createTextNode(t));
+  });
+  cav.classList.toggle("show", lines.length > 0);
+}
+
+/* ---------------- table ---------------- */
+function renderTable(state) {
+  document.getElementById("tableTitle").textContent = "Full estimate table — " + STATE_META[state].name;
+  const tbody = document.getElementById("table-body");
+  tbody.innerHTML = "";
+  const rows = byState(state);
+  const realMetrics = METRIC_ORDER.filter(m => !METRIC_INFO[m].derived);
+  CLASS_ORDER.forEach(cls => {
+    realMetrics.forEach(metric => {
+      const r = rows.find(x => x.stand_size_class === cls && x.metric === metric);
+      if (!r) return;
+      const info = METRIC_INFO[metric];
+      const tr = document.createElement("tr");
+      const tdCls = document.createElement("td");
+      const dot = document.createElement("span"); dot.className = "swatch-dot"; dot.style.background = CLASS_COLOR[cls];
+      tdCls.append(dot, document.createTextNode(cls));
+      const tdMetric = document.createElement("td"); tdMetric.textContent = info.title;
+      const tdEst = document.createElement("td"); tdEst.textContent = fmtFull(r.estimate);
+      const tdUnit = document.createElement("td"); tdUnit.textContent = info.unit;
+      const tdSe = document.createElement("td"); tdSe.textContent = r.se > 0 ? fmtFull(r.se) : "—";
+      const tdSep = document.createElement("td"); tdSep.textContent = r.se > 0 ? r.se_percent.toFixed(1) + "%" : "—";
+      const tdN = document.createElement("td"); tdN.textContent = r.plot_count;
+      tr.append(tdCls, tdMetric, tdEst, tdUnit, tdSe, tdSep, tdN);
+      tbody.appendChild(tr);
+    });
+  });
+}
+
+document.getElementById("downloadStateCsvBtn").addEventListener("click", () => {
+  const state = stateSel.value;
+  const rows = byState(state);
+  const headers = ["state","stand_size_class","metric","unit","estimate","se","se_percent","plot_count","report_years"];
+  const body = rows.map(r => [state, r.stand_size_class, r.metric, METRIC_INFO[r.metric] ? METRIC_INFO[r.metric].unit : "", r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+  saveFile("fia_" + state.replace(/\s+/g,"_") + ".csv", rowsToCsv(headers, body), "text/csv");
+});
+document.getElementById("downloadAllCsvBtn").addEventListener("click", () => {
+  const headers = ["state","stand_size_class","metric","unit","estimate","se","se_percent","plot_count","report_years"];
+  const body = RAW.map(r => [r.state, r.stand_size_class, r.metric, METRIC_INFO[r.metric] ? METRIC_INFO[r.metric].unit : "", r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+  saveFile("fia_all_states_standtype.csv", rowsToCsv(headers, body), "text/csv");
+});
+
+/* ---------------- custom export panel ---------------- */
+// Lets a viewer pick any combination of states x metrics x granularity and
+// get one combined CSV in a click -- the thing EVALIDator makes you do one
+// state, one query at a time and stitch together yourself.
+const EXPORTABLE_METRICS = METRIC_ORDER.filter(k => !METRIC_INFO[k].derived);
+
+(function buildExportChecklists() {
+  const metricList = document.getElementById("exportMetricList");
+  EXPORTABLE_METRICS.forEach(k => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = k; cb.checked = true;
+    label.append(cb, document.createTextNode(METRIC_INFO[k].title));
+    metricList.appendChild(label);
+  });
+
+  const stateList = document.getElementById("exportStateList");
+  labels.forEach(l => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = l; cb.checked = (l === stateSel.value);
+    label.append(cb, document.createTextNode(STATE_META[l].name));
+    stateList.appendChild(label);
+  });
+})();
+
+document.querySelectorAll(".export-quick-links button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const all = btn.dataset.action === "all";
+    document.getElementById(btn.dataset.target).querySelectorAll("input").forEach(cb => { cb.checked = all; });
+  });
+});
+
+document.getElementById("openExportBtn").addEventListener("click", () => {
+  const panel = document.getElementById("exportPanel");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.getElementById("exportDownloadBtn").addEventListener("click", async () => {
+  const granularity = document.getElementById("exportGranularity").value;
+  const selectedMetrics = Array.from(document.querySelectorAll("#exportMetricList input:checked")).map(el => el.value);
+  const selectedStates = Array.from(document.querySelectorAll("#exportStateList input:checked")).map(el => el.value);
+  const status = document.getElementById("exportStatus");
+  if (!selectedMetrics.length || !selectedStates.length) { toast("Pick at least one state and one metric."); return; }
+
+  if (granularity === "state") {
+    const headers = ["state", "stand_size_class", "metric", "unit", "estimate", "se", "se_percent", "plot_count", "report_years"];
+    const body = [];
+    selectedStates.forEach(st => {
+      byState(st).filter(r => selectedMetrics.includes(r.metric)).forEach(r => {
+        body.push([st, r.stand_size_class, r.metric, METRIC_INFO[r.metric].unit, r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+      });
+    });
+    saveFile("fia_custom_" + selectedStates.length + "states.csv", rowsToCsv(headers, body), "text/csv");
+    return;
+  }
+
+  status.textContent = "Fetching county data for " + selectedStates.length + " state" + (selectedStates.length > 1 ? "s" : "") + "…";
+  let results;
+  try {
+    results = await Promise.all(selectedStates.map(st => getCountyData(st).catch(() => [])));
+  } finally {
+    status.textContent = "";
+  }
+  const headers = ["state", "county_fips", "county_name", "stand_size_class", "metric", "unit", "estimate", "se", "se_percent", "plot_count", "report_years"];
+  const body = [];
+  selectedStates.forEach((st, i) => {
+    results[i].filter(r => selectedMetrics.includes(r.metric)).forEach(r => {
+      body.push([st, r.county_fips, r.county_name, r.stand_size_class, r.metric, METRIC_INFO[r.metric].unit, r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+    });
+  });
+  if (!body.length) { toast("No county data came back for that selection."); return; }
+  saveFile("fia_custom_counties_" + selectedStates.length + "states.csv", rowsToCsv(headers, body), "text/csv");
+});
+
+/* ---------------- footer ---------------- */
+function renderFooter() {
+  const foot = document.getElementById("provenance");
+  foot.innerHTML = "";
+  const lines = [
+    "Source: USDA Forest Service FIADB-API, /fullreport (results pre-fetched and cached in this page — the published page cannot call the live API directly).",
+    "Grouping: rselected = \"Stand-size class\". Metrics (snum): volume 11287 · biomass 10 · growth 11303 · removals 11305 · mortality 11304 · sawlog 20 · area 2.",
+    "Map: US state and county boundaries via us-atlas (public domain, US Census TIGER derivative), Albers equal-area composite projection. County-level figures cross-tab the same rselected=\"Stand-size class\" query against cselected=\"County code and name\" — one live query per state returns every county at once.",
+    "\"Per acre of whole state\" uses each state's total land area (US Census reference figures, land only, excludes water) — a coarse denominator, not FIA data.",
+    "Sampling error (SE) reflects FIA's stratified design; classes with few plots carry wide SE — see the table before treating a bar as precise.",
+    "County map \"no data\" holes have two distinct causes, both shown on hover: in Texas or Alaska, growth/removals/mortality specifically are missing for counties without a remeasured (multiple-visit) plot history in either survey vintage — volume, biomass, and area are unaffected there (see the banner above when one of those states is selected); or a small/heavily urbanized county (e.g. Virginia's independent cities) where FIA's systematic plot grid places zero plots — a real absence of sampled forest, not a gap in this pull."
+  ];
+  lines.forEach(t => { const d = document.createElement("div"); d.textContent = t; foot.appendChild(d); });
+}
+
+/* ---------------- boot ---------------- */
+renderAll();
+renderCaveat(stateSel.value, metricSel.value);
+renderTable(stateSel.value);
+renderInventoryBadge(stateSel.value);
+renderFooter();
+highlightMapState(stateSel.value);
+</script>
+
+</body>
+</html>
