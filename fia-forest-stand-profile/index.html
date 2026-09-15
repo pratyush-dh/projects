@@ -381,6 +381,7 @@ const STATE_META = {
 // aren't summed anywhere in this page -- the tooltip calls this out.
 const FIPS_TO_LABEL = {"01":"AL","02":"AK-Coastal","04":"AZ","05":"AR","06":"CA","08":"CO","09":"CT","10":"DE","12":"FL","13":"GA","15":"HI","16":"ID","17":"IL","18":"IN","19":"IA","20":"KS","21":"KY","22":"LA","23":"ME","24":"MD","25":"MA","26":"MI","27":"MN","28":"MS","29":"MO","30":"MT","31":"NE","32":"NV","33":"NH","34":"NJ","35":"NM","36":"NY","37":"NC","38":"ND","39":"OH","40":"OK","41":"OR","42":"PA","44":"RI","45":"SC","46":"SD","47":"TN","48":"TX-East","49":"UT","50":"VT","51":"VA","53":"WA","54":"WV","55":"WI","56":"WY"};
 const SPLIT_FIPS_NOTE = { "02": "Coastal unit shown; Interior unit differs (older survey)", "48": "East unit shown; West unit differs (much older survey)" };
+const SPLIT_PARTNER = { "AK-Coastal": "AK-Interior", "AK-Interior": "AK-Coastal", "TX-East": "TX-West", "TX-West": "TX-East" };
 // label -> 2-digit state FIPS, for filtering the national county topology down
 // to one state's counties when zooming in. AK-Coastal/Interior and TX-East/West
 // share their parent state's FIPS since county FIPS codes don't encode the split.
@@ -986,7 +987,8 @@ function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
 
   const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of that county's forest (no whole-county acreage on file)" : "";
   document.getElementById("mapTitle").textContent = info.title + " by county — " + STATE_META[state].name + viewLabel;
-  document.getElementById("mapSub").textContent = info.full;
+  const partner = SPLIT_PARTNER[state];
+  document.getElementById("mapSub").textContent = info.full + (partner ? " — gray counties here belong to " + STATE_META[partner].name + ", a separate survey unit not shown on this map." : "");
 
   countyG.selectAll("path.county-shape")
     .data(features, d => d.id)
@@ -1063,13 +1065,28 @@ function renderInventoryBadge(state) {
 /* ---------------- caveat ---------------- */
 function renderCaveat(state) {
   const cav = document.getElementById("caveat");
+  const lines = [];
+
   const hasGrm = byState(state).some(r => r.metric === "mortality");
   if (!hasGrm) {
-    cav.textContent = STATE_META[state].name + " has no growth-accounting-enabled evaluation in FIADB, so mortality, growth, and removals cannot be estimated through this endpoint for this unit. Volume, biomass, and sawlog stock are unaffected.";
-    cav.classList.add("show");
-  } else {
-    cav.classList.remove("show");
+    lines.push(STATE_META[state].name + " has no growth-accounting-enabled evaluation in FIADB, so mortality, growth, and removals cannot be estimated through this endpoint for this unit. Volume, biomass, and sawlog stock are unaffected.");
   }
+
+  const partner = SPLIT_PARTNER[state];
+  if (partner) {
+    const myYears = formatReportYears(reportYearsFor(state));
+    const partnerYears = formatReportYears(reportYearsFor(partner));
+    lines.push(STATE_META[state].name + " is a survey sub-unit (inventory " + myYears + "). The rest of the state belongs to " +
+      STATE_META[partner].name + " (inventory " + partnerYears + ") — a different vintage, so the two aren't summed anywhere on this page. " +
+      "On the county map below, counties outside this unit show as “no data” gray, not missing data — switch the state dropdown to see them.");
+  }
+
+  cav.innerHTML = "";
+  lines.forEach((t, i) => {
+    if (i > 0) cav.appendChild(document.createElement("br"));
+    cav.appendChild(document.createTextNode(t));
+  });
+  cav.classList.toggle("show", lines.length > 0);
 }
 
 /* ---------------- table ---------------- */
