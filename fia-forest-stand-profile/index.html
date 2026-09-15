@@ -147,6 +147,7 @@
     border-radius: 7px; padding: 8px 13px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
     white-space: nowrap;
   }
+  .btn[hidden] { display: none; }
   .btn:hover { background: var(--accent-soft); }
   .btn:disabled { opacity: 0.45; cursor: not-allowed; }
   .btn-row { display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap; }
@@ -272,6 +273,7 @@
 
   /* ---------- export preview modal ---------- */
   .modal-overlay { position: fixed; inset: 0; background: rgba(11,11,11,0.55); display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+  .modal-overlay[hidden] { display: none; }
   .modal-box { background: var(--surface-card); border-radius: 12px; width: min(1040px, 96vw); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.4); }
   .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 14px 18px; border-bottom: 1px solid var(--border); flex: none; }
   .modal-title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
