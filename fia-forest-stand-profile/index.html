@@ -1295,12 +1295,27 @@ function zoomTransformForBounds(bounds) {
   return d3.zoomIdentity.translate(tx, ty).scale(scale);
 }
 
+const viewModeOptPerForest = viewModeSel.querySelector('option[value="per_forest_acre"]');
+const viewModeOptPerState = viewModeSel.querySelector('option[value="per_state_acre"]');
+
 function enterCountyMode(state) {
   const fips = STATE_FIPS[state];
   if (!fips) return;
   countyModeState = state;
   document.getElementById("backToUsBtn").hidden = false;
   labelsG.style("display", "none");
+
+  // "Per acre of that stand type" only means something next to a per-class
+  // breakdown (the state-level bar chart); the county map shows one summed
+  // total per county, so relabel it, and "per acre of whole state" has no
+  // per-county analogue at all (dividing one county by the WHOLE state's
+  // acreage isn't a density) -- rather than silently reusing the per-forest
+  // calculation for it, as this used to do, disable it outright and fall
+  // back to per-county forest density if it was selected.
+  viewModeOptPerForest.textContent = "Per acre of that county's forest";
+  viewModeOptPerState.textContent = "Per acre of whole state (state view only)";
+  viewModeOptPerState.disabled = true;
+  if (viewModeSel.value === "per_state_acre") viewModeSel.value = "per_forest_acre";
 
   Promise.all([getCountyTopo(), getCountyData(state)])
     .then(([topo, rows]) => {
@@ -1347,6 +1362,9 @@ function exitCountyMode() {
   document.getElementById("backToUsBtn").hidden = true;
   document.getElementById("countyTableSection").hidden = true;
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
+  viewModeOptPerForest.textContent = "Per acre of that stand type";
+  viewModeOptPerState.textContent = "Per acre of whole state";
+  viewModeOptPerState.disabled = false;
   renderMap(metricSel.value, currentView());
 }
 
