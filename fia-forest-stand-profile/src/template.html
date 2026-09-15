@@ -333,7 +333,6 @@
     </div>
     <div class="btn-row">
       <button class="btn" id="backToUsBtn" type="button" hidden>&#8592; Back to US map</button>
-      <button class="btn" id="clearSelectionBtn" type="button" hidden>&#10005; Clear selection</button>
       <button class="btn" id="resetZoomBtn" type="button">&#8635; Reset zoom</button>
       <button class="btn" id="downloadMapBtn" type="button">&#8681; Download map (SVG)</button>
       <button class="btn" id="openExportBtn" type="button">&#128202; View / export data</button>
@@ -902,6 +901,21 @@ function renderAll() {
 
 metricSel.addEventListener("change", renderAll);
 viewModeSel.addEventListener("change", renderAll);
+// One button covers both "zoomed into a county, go back out" and "a state
+// is selected at the national view, reset it" -- they were two separate
+// buttons at first and could both show at once doing overlapping things,
+// which read as redundant. Its label and behavior now just follow whichever
+// of those two states actually applies.
+function refreshBackButton() {
+  const btn = document.getElementById("backToUsBtn");
+  if (countyModeState) {
+    btn.hidden = false;
+    btn.innerHTML = "&#8592; Back to US map";
+  } else {
+    btn.hidden = stateSel.value === "US";
+    btn.innerHTML = "&#10005; Clear selection";
+  }
+}
 function onStateSelected() {
   const state = stateSel.value;
   renderDetail(state, metricSel.value, currentView());
@@ -910,13 +924,13 @@ function onStateSelected() {
   renderTable(state);
   renderInventoryBadge(state);
   highlightMapState(state);
-  document.getElementById("clearSelectionBtn").hidden = state === "US";
   // "United States" is a synthetic total across every state, not a place to
   // zoom into -- there's no single national county layer to show.
   if (state === "US") { exitCountyMode(); } else { enterCountyMode(state); }
+  refreshBackButton();
 }
 stateSel.addEventListener("change", onStateSelected);
-document.getElementById("clearSelectionBtn").addEventListener("click", () => {
+document.getElementById("backToUsBtn").addEventListener("click", () => {
   stateSel.value = "US";
   onStateSelected();
 });
@@ -1009,7 +1023,6 @@ function highlightMapState(state) {
 document.getElementById("resetZoomBtn").addEventListener("click", () => {
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
 });
-document.getElementById("backToUsBtn").addEventListener("click", exitCountyMode);
 // Fixed light-mode ink, independent of whatever theme is active on screen --
 // a downloaded SVG is a standalone document with no page <style> block behind
 // it, so anything referencing var(--...) or a CSS class (the live map's own
@@ -1347,7 +1360,7 @@ function enterCountyMode(state) {
   const fips = STATE_FIPS[state];
   if (!fips) return;
   countyModeState = state;
-  document.getElementById("backToUsBtn").hidden = false;
+  refreshBackButton();
   labelsG.style("display", "none");
 
   // "Per acre of that stand type" only means something next to a per-class
@@ -1404,7 +1417,7 @@ function exitCountyMode() {
   countyG.selectAll("path.county-shape").remove();
   statesSel.style("opacity", 1);
   labelsG.style("display", null);
-  document.getElementById("backToUsBtn").hidden = true;
+  refreshBackButton();
   document.getElementById("countyTableSection").hidden = true;
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
   viewModeOptPerForest.textContent = "Per acre of that stand type";
@@ -1673,7 +1686,7 @@ renderTable(stateSel.value);
 renderInventoryBadge(stateSel.value);
 renderFooter();
 highlightMapState(stateSel.value);
-document.getElementById("clearSelectionBtn").hidden = stateSel.value === "US";
+refreshBackButton();
 </script>
 
 </body>
