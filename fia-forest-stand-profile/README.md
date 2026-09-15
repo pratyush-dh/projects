@@ -26,7 +26,17 @@ whether it's locked up in young regenerating stands or old mature ones.
 
 Light/dark theme toggle top-right; typeface is Source Sans (Google Fonts'
 maintained successor to Source Sans Pro), matching the typeface FIADB-API's
-own pages ship (`static/css/index.css`).
+own pages ship (`static/css/index.css`). State postal-code labels sit at
+each state's centroid on the national map.
+
+**"View / export data"** opens a custom export builder: pick any combination
+of states and metrics, at state or county level, and download one combined
+CSV — the multi-state, multi-variable pull EVALIDator makes you do one query
+at a time and stitch together by hand. **"Download map (SVG)"** exports the
+map as a self-contained, annotated file — title, description, legend, and a
+source line baked in as real SVG shapes/text (not just the bare shapes), at
+whatever pan/zoom the map is currently at, so it reads on its own dropped
+into a report or a slide.
 
 ## Why this exists
 

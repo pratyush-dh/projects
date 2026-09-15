@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Interactive US forest inventory explorer built on live USDA FIADB-API data: volume, biomass, growth, mortality, removals, sawlog stock, forest area, and inventory currency by stand-size class, state and county level, with a zoomable choropleth map.">
+<meta name="description" content="Interactive US forest inventory explorer built on live USDA FIADB-API data: volume, biomass, growth, mortality, removals, sawlog stock, forest area, and inventory currency by stand-size class, state and county level, with a zoomable choropleth map and custom CSV export.">
 <title>Forest Stand Profile</title>
 <script>
   // Applied synchronously, before CSS paints, so a returning visitor's saved
@@ -172,6 +172,11 @@
   .map-state { stroke: var(--surface-card); stroke-width: 0.6; cursor: pointer; transition: filter 0.08s ease; }
   .map-state:hover, .map-state.hover { filter: brightness(1.12); stroke-width: 1.2; }
   .map-state.selected { stroke: var(--accent); stroke-width: 1.6; }
+  .state-label {
+    font-size: 9px; font-weight: 600; fill: #14170f;
+    stroke: #ffffff; stroke-width: 2.5px; paint-order: stroke fill;
+    font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif;
+  }
   .map-legend { display: flex; align-items: center; gap: 10px; margin-top: 10px; font-variant-numeric: tabular-nums; font-size: 11px; color: var(--text-secondary); flex-wrap: wrap; }
   .map-legend-ramp { display: flex; height: 10px; border-radius: 2px; overflow: hidden; }
   .map-legend-ramp span { display: block; width: 14px; height: 100%; }
@@ -251,7 +256,19 @@
   table.data-table tbody tr:last-child td { border-bottom: none; }
   .swatch-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; vertical-align: middle; }
 
-  footer.provenance { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); border-top: 1px solid var(--gridline); padding-top: 16px; }
+  /* ---------- custom export panel ---------- */
+  .export-intro { font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; max-width: 640px; margin: 0 0 14px; }
+  .export-controls { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 14px; }
+  .export-col { min-width: 170px; }
+  .export-col-wide { flex: 1; min-width: 220px; }
+  .export-col-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .export-quick-links { display: flex; gap: 8px; }
+  .export-quick-links button { background: none; border: none; padding: 0; font-size: 11px; color: var(--accent-ink); cursor: pointer; text-decoration: underline; }
+  .export-checklist { border: 1px solid var(--border); border-radius: 7px; padding: 8px 10px; max-height: 150px; overflow-y: auto; display: flex; flex-direction: column; gap: 5px; background: var(--surface-tile); }
+  .export-checklist-states { max-height: 220px; }
+  .export-checklist label { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--text-secondary); cursor: pointer; white-space: nowrap; }
+  .export-checklist input { margin: 0; cursor: pointer; }
+  .export-status { font-size: 12px; color: var(--text-muted); align-self: center; } { font-family: "Source Sans 3", "Source Sans Pro", "Helvetica Neue", "Helvetica", "Roboto", "Arial", sans-serif; font-size: 11.5px; line-height: 1.7; color: var(--text-muted); border-top: 1px solid var(--gridline); padding-top: 16px; }
 </style>
 </head>
 <body>
@@ -303,6 +320,7 @@
       <button class="btn" id="backToUsBtn" type="button" hidden>&#8592; Back to US map</button>
       <button class="btn" id="resetZoomBtn" type="button">&#8635; Reset zoom</button>
       <button class="btn" id="downloadMapBtn" type="button">&#8681; Download map (SVG)</button>
+      <button class="btn" id="openExportBtn" type="button">&#128202; View / export data</button>
     </div>
   </div>
 
@@ -323,6 +341,38 @@
     <div class="tiles-card">
       <div class="tiles-card-title" id="tilesCardTitle">Headline totals</div>
       <div id="tiles"></div>
+    </div>
+  </div>
+
+  <div class="table-section" id="exportPanel" hidden>
+    <div class="table-title">Custom data export</div>
+    <p class="export-intro">Pick any states and any metrics, at state or county level, and download one combined CSV — the multi-state, multi-variable pull EVALIDator makes you run one query at a time for.</p>
+    <div class="export-controls">
+      <div class="control-group">
+        <label class="control-label" for="exportGranularity">Granularity</label>
+        <select id="exportGranularity">
+          <option value="state">State totals</option>
+          <option value="county">County-level</option>
+        </select>
+      </div>
+      <div class="control-group export-col">
+        <div class="export-col-head">
+          <label class="control-label">Metrics</label>
+          <div class="export-quick-links"><button type="button" data-target="exportMetricList" data-action="all">All</button><button type="button" data-target="exportMetricList" data-action="none">None</button></div>
+        </div>
+        <div class="export-checklist" id="exportMetricList"></div>
+      </div>
+      <div class="control-group export-col export-col-wide">
+        <div class="export-col-head">
+          <label class="control-label">States</label>
+          <div class="export-quick-links"><button type="button" data-target="exportStateList" data-action="all">All</button><button type="button" data-target="exportStateList" data-action="none">None</button></div>
+        </div>
+        <div class="export-checklist export-checklist-states" id="exportStateList"></div>
+      </div>
+    </div>
+    <div class="btn-row" style="margin-left:0">
+      <button class="btn" id="exportDownloadBtn" type="button">&#8681; Download custom CSV</button>
+      <span class="export-status" id="exportStatus"></span>
     </div>
   </div>
 
@@ -824,6 +874,7 @@ const mapSvg = d3.select("#mapSvg");
 const mapG = mapSvg.append("g").attr("id", "mapZoomG");
 const geoPathGen = d3.geoPath();
 let countyG = null;
+let labelsG = null;
 
 (function initMap() {
   const geo = topojson.feature(TOPO, TOPO.objects.states);
@@ -838,6 +889,22 @@ let countyG = null;
   // Appended after the state paths so county shapes paint on top of (visually
   // replace) the dimmed state polygon once a viewer drills into it.
   countyG = mapG.append("g").attr("id", "countyLayer");
+
+  // Postal-code labels at each state's centroid, on top of everything so
+  // they stay legible over any fill. Hidden while zoomed into one state's
+  // counties (see enter/exitCountyMode) since 49 other labels crowding a
+  // zoomed-in view helps no one.
+  labelsG = mapG.append("g").attr("id", "stateLabelsG");
+  labelsG.selectAll("text.state-label")
+    .data(stateFeatures.filter(d => FIPS_TO_LABEL[d.id]))
+    .join("text")
+    .attr("class", "state-label")
+    .attr("x", d => geoPathGen.centroid(d)[0])
+    .attr("y", d => geoPathGen.centroid(d)[1])
+    .attr("text-anchor", "middle")
+    .attr("dominant-baseline", "middle")
+    .attr("pointer-events", "none")
+    .text(d => FIPS_TO_LABEL[d.id]);
 
   mapZoom = d3.zoom().scaleExtent([1, 8]).on("zoom", (event) => mapG.attr("transform", event.transform));
   mapSvg.call(mapZoom);
@@ -870,15 +937,144 @@ document.getElementById("resetZoomBtn").addEventListener("click", () => {
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
 });
 document.getElementById("backToUsBtn").addEventListener("click", exitCountyMode);
+// Fixed light-mode ink, independent of whatever theme is active on screen --
+// a downloaded SVG is a standalone document with no page <style> block behind
+// it, so anything referencing var(--...) or a CSS class (the live map's own
+// stroke/no-data fill both do) would silently break once opened outside this
+// page. Print-style light-on-white also just travels better into a report or
+// a slide than whatever theme the viewer happened to be in.
+const EXPORT_INK = { bg: "#ffffff", ink: "#14170f", secondary: "#52514e", muted: "#898781", nodata: "#dedcd3", stroke: "#ffffff", rule: "#e1e0d9" };
+const EXPORT_FONT = "'Source Sans Pro','Helvetica Neue',Helvetica,Arial,sans-serif";
+
+function wrapTextLines(text, maxChars) {
+  const words = text.split(/\s+/);
+  const lines = [];
+  let cur = "";
+  words.forEach(w => {
+    const next = cur ? cur + " " + w : w;
+    if (next.length > maxChars && cur) { lines.push(cur); cur = w; } else { cur = next; }
+  });
+  if (cur) lines.push(cur);
+  return lines;
+}
+
+function svgEl(tag, attrs, text) {
+  const e = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+// Builds a self-contained, annotated SVG (title, description, legend, source
+// line) around whatever the map currently shows -- the national US choropleth
+// or a county drill-down, at its current pan/zoom -- so the exported file
+// reads on its own in a report or a slide, not just as bare shapes.
+function buildMapExportSvg() {
+  const title = document.getElementById("mapTitle").textContent;
+  const sub = document.getElementById("mapSub").textContent;
+  const caveatEl = document.getElementById("caveat");
+  const caveatText = caveatEl.classList.contains("show") ? caveatEl.textContent : "";
+
+  const mapW = 975, mapH = 610, pad = 24;
+  const subLines = wrapTextLines(sub, 118);
+  const caveatLines = caveatText ? wrapTextLines(caveatText, 118) : [];
+  const titleY = pad + 18;
+  const subStartY = titleY + 24;
+  const subH = subLines.length * 16;
+  const caveatStartY = subStartY + subH + 4;
+  const caveatH = caveatLines.length * 15;
+  const headerH = (caveatStartY + caveatH + 14) - pad;
+  const legendH = 44;
+  const footerH = 26;
+  const totalW = mapW + pad * 2;
+  const totalH = pad + headerH + mapH + legendH + footerH + pad;
+
+  const out = svgEl("svg", {
+    viewBox: `0 0 ${totalW} ${totalH}`,
+    width: totalW, height: totalH, "font-family": EXPORT_FONT
+  });
+  out.appendChild(svgEl("rect", { x: 0, y: 0, width: totalW, height: totalH, fill: EXPORT_INK.bg }));
+  out.appendChild(svgEl("text", { x: pad, y: titleY, "font-size": 19, "font-weight": 700, fill: EXPORT_INK.ink }, title));
+  subLines.forEach((line, i) => {
+    out.appendChild(svgEl("text", { x: pad, y: subStartY + i * 16, "font-size": 12.5, fill: EXPORT_INK.secondary }, line));
+  });
+  caveatLines.forEach((line, i) => {
+    out.appendChild(svgEl("text", { x: pad, y: caveatStartY + i * 15, "font-size": 11.5, fill: "#8a5a1c" }, line));
+  });
+  out.appendChild(svgEl("line", { x1: pad, x2: totalW - pad, y1: pad + headerH - 6, y2: pad + headerH - 6, stroke: EXPORT_INK.rule, "stroke-width": 1 }));
+
+  // --- map content, cloned at its current pan/zoom, colors inlined ---
+  const mapGroup = svgEl("g", { transform: `translate(${pad}, ${pad + headerH})` });
+  const clip = svgEl("clipPath", { id: "export-clip" });
+  clip.appendChild(svgEl("rect", { x: 0, y: 0, width: mapW, height: mapH }));
+  mapGroup.appendChild(clip);
+  const zoomG = document.getElementById("mapZoomG").cloneNode(true);
+  zoomG.querySelectorAll("path.map-state, path.county-shape").forEach(p => {
+    const fill = p.getAttribute("fill");
+    p.setAttribute("fill", fill === "var(--map-nodata)" ? EXPORT_INK.nodata : (fill || EXPORT_INK.nodata));
+    p.setAttribute("stroke", EXPORT_INK.stroke);
+    p.setAttribute("stroke-width", "0.6");
+    p.removeAttribute("class");
+  });
+  // State-name labels rely on the .state-label CSS class, which doesn't exist
+  // in a standalone SVG file -- inline the same look as explicit attributes.
+  zoomG.querySelectorAll("text.state-label").forEach(t => {
+    t.setAttribute("font-size", "9");
+    t.setAttribute("font-weight", "600");
+    t.setAttribute("fill", "#14170f");
+    t.setAttribute("stroke", "#ffffff");
+    t.setAttribute("stroke-width", "2.5");
+    t.setAttribute("paint-order", "stroke fill");
+    t.removeAttribute("class");
+  });
+  const contentWrap = svgEl("g", { "clip-path": "url(#export-clip)" });
+  contentWrap.appendChild(zoomG);
+  mapGroup.appendChild(contentWrap);
+  out.appendChild(mapGroup);
+
+  // --- legend, redrawn as plain SVG shapes from whichever renderer last ran ---
+  const legendY = pad + headerH + mapH + 26;
+  if (currentLegendData) {
+    const L = currentLegendData;
+    let x = pad;
+    if (L.type === "discrete") {
+      L.distinct.forEach((v, i) => {
+        out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 13, height: 13, rx: 3, fill: L.steps[i] }));
+        const label = fmtPrecise(v, L.metricKey, L.viewMode) + (L.unit ? " " + L.unit : "");
+        const t = svgEl("text", { x: x + 18, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, label);
+        out.appendChild(t);
+        x += 18 + label.length * 6.2 + 16;
+      });
+    } else {
+      const loText = fmtPrecise(L.domainMin, L.metricKey, L.viewMode) + " " + L.unit;
+      out.appendChild(svgEl("text", { x, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, loText));
+      x += loText.length * 6.2 + 10;
+      L.ramp.forEach(c => { out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 14, height: 10, fill: c })); x += 14; });
+      x += 10;
+      const hiText = fmtPrecise(L.domainMax, L.metricKey, L.viewMode) + " " + L.unit;
+      out.appendChild(svgEl("text", { x, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, hiText));
+      x += hiText.length * 6.2 + 20;
+    }
+    out.appendChild(svgEl("rect", { x, y: legendY - 11, width: 11, height: 11, rx: 3, fill: EXPORT_INK.nodata }));
+    out.appendChild(svgEl("text", { x: x + 16, y: legendY, "font-size": 11, fill: EXPORT_INK.secondary }, "No data"));
+  }
+
+  // --- footer / source line ---
+  const footerY = totalH - pad + 4;
+  const dateStr = new Date().toISOString().slice(0, 10);
+  out.appendChild(svgEl("text", { x: pad, y: footerY, "font-size": 10.5, fill: EXPORT_INK.muted },
+    "Source: USDA Forest Service FIADB-API (fiadb-api/fullreport) · Forest Stand Profile · exported " + dateStr));
+
+  return out;
+}
+
 document.getElementById("downloadMapBtn").addEventListener("click", () => {
   const metric = metricSel.value;
-  const svgEl = document.getElementById("mapSvg");
-  const clone = svgEl.cloneNode(true);
-  clone.setAttribute("xmlns", "http://www.w3.org/2000/svg");
-  clone.removeAttribute("style");
+  const stateSuffix = countyModeState ? "_" + countyModeState.replace(/\s+/g, "_") : "";
+  const out = buildMapExportSvg();
   const serializer = new XMLSerializer();
-  const src = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(clone);
-  saveFile("fia_map_" + metric + ".svg", src, "image/svg+xml");
+  const src = '<?xml version="1.0" standalone="no"?>\r\n' + serializer.serializeToString(out);
+  saveFile("fia_map_" + metric + stateSuffix + ".svg", src, "image/svg+xml");
 });
 
 // Two color-scale/legend styles share the map and county-map renderers:
@@ -940,10 +1136,12 @@ function renderMap(metricKey, viewMode) {
     const d = buildDiscreteYearScale(values, ramp);
     scale = d.scale;
     renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+    currentLegendData = { type: "discrete", distinct: d.distinct, steps: d.steps, metricKey, viewMode, unit };
   } else {
     const domainMin = Math.min(...values), domainMax = Math.max(...values);
     scale = d3.scaleQuantize().domain([domainMin, domainMax]).range(ramp);
     renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+    currentLegendData = { type: "continuous", ramp, domainMin, domainMax, metricKey, viewMode, unit };
   }
 
   statesSel.attr("fill", d => {
@@ -1032,6 +1230,7 @@ function renderDetail(state, metricKey, viewMode) {
 /* ---------------- county drill-down ---------------- */
 let countyModeState = null;   // label currently zoomed into, or null for the US view
 let countyFeaturesCache = null;
+let currentLegendData = null; // set by renderMap/renderCountyLayer, read by the SVG export builder
 
 function zoomTransformForBounds(bounds) {
   const [[x0, y0], [x1, y1]] = bounds;
@@ -1048,6 +1247,7 @@ function enterCountyMode(state) {
   if (!fips) return;
   countyModeState = state;
   document.getElementById("backToUsBtn").hidden = false;
+  labelsG.style("display", "none");
 
   Promise.all([getCountyTopo(), getCountyData(state)])
     .then(([topo, rows]) => {
@@ -1085,6 +1285,7 @@ function exitCountyMode() {
   countyModeState = null;
   countyG.selectAll("path.county-shape").remove();
   statesSel.style("opacity", 1);
+  labelsG.style("display", null);
   document.getElementById("backToUsBtn").hidden = true;
   document.getElementById("countyTableSection").hidden = true;
   mapSvg.transition().duration(300).call(mapZoom.transform, d3.zoomIdentity);
@@ -1105,11 +1306,13 @@ function renderCountyLayer(state, features, countyRows, metricKey, viewMode) {
     const d = buildDiscreteYearScale(values.length ? values : [0], ramp);
     scale = d.scale;
     renderLegendDiscrete(legend, d.distinct, d.steps, metricKey, viewMode, unit);
+    currentLegendData = { type: "discrete", distinct: d.distinct, steps: d.steps, metricKey, viewMode, unit };
   } else {
     const domainMin = values.length ? Math.min(...values) : 0;
     const domainMax = values.length ? Math.max(...values) : 1;
     scale = d3.scaleQuantize().domain([domainMin === domainMax ? 0 : domainMin, domainMax || 1]).range(ramp);
     renderLegendContinuous(legend, ramp, domainMin, domainMax, metricKey, viewMode, unit);
+    currentLegendData = { type: "continuous", ramp, domainMin, domainMax, metricKey, viewMode, unit };
   }
 
   const viewLabel = viewMode === "per_forest_acre" ? " — per acre of that stand type" : viewMode === "per_state_acre" ? " — per acre of that county's forest (no whole-county acreage on file)" : "";
@@ -1247,6 +1450,80 @@ document.getElementById("downloadAllCsvBtn").addEventListener("click", () => {
   const headers = ["state","stand_size_class","metric","unit","estimate","se","se_percent","plot_count","report_years"];
   const body = RAW.map(r => [r.state, r.stand_size_class, r.metric, METRIC_INFO[r.metric] ? METRIC_INFO[r.metric].unit : "", r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
   saveFile("fia_all_states_standtype.csv", rowsToCsv(headers, body), "text/csv");
+});
+
+/* ---------------- custom export panel ---------------- */
+// Lets a viewer pick any combination of states x metrics x granularity and
+// get one combined CSV in a click -- the thing EVALIDator makes you do one
+// state, one query at a time and stitch together yourself.
+const EXPORTABLE_METRICS = METRIC_ORDER.filter(k => !METRIC_INFO[k].derived);
+
+(function buildExportChecklists() {
+  const metricList = document.getElementById("exportMetricList");
+  EXPORTABLE_METRICS.forEach(k => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = k; cb.checked = true;
+    label.append(cb, document.createTextNode(METRIC_INFO[k].title));
+    metricList.appendChild(label);
+  });
+
+  const stateList = document.getElementById("exportStateList");
+  labels.forEach(l => {
+    const label = document.createElement("label");
+    const cb = document.createElement("input"); cb.type = "checkbox"; cb.value = l; cb.checked = (l === stateSel.value);
+    label.append(cb, document.createTextNode(STATE_META[l].name));
+    stateList.appendChild(label);
+  });
+})();
+
+document.querySelectorAll(".export-quick-links button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const all = btn.dataset.action === "all";
+    document.getElementById(btn.dataset.target).querySelectorAll("input").forEach(cb => { cb.checked = all; });
+  });
+});
+
+document.getElementById("openExportBtn").addEventListener("click", () => {
+  const panel = document.getElementById("exportPanel");
+  panel.hidden = !panel.hidden;
+  if (!panel.hidden) panel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+});
+
+document.getElementById("exportDownloadBtn").addEventListener("click", async () => {
+  const granularity = document.getElementById("exportGranularity").value;
+  const selectedMetrics = Array.from(document.querySelectorAll("#exportMetricList input:checked")).map(el => el.value);
+  const selectedStates = Array.from(document.querySelectorAll("#exportStateList input:checked")).map(el => el.value);
+  const status = document.getElementById("exportStatus");
+  if (!selectedMetrics.length || !selectedStates.length) { toast("Pick at least one state and one metric."); return; }
+
+  if (granularity === "state") {
+    const headers = ["state", "stand_size_class", "metric", "unit", "estimate", "se", "se_percent", "plot_count", "report_years"];
+    const body = [];
+    selectedStates.forEach(st => {
+      byState(st).filter(r => selectedMetrics.includes(r.metric)).forEach(r => {
+        body.push([st, r.stand_size_class, r.metric, METRIC_INFO[r.metric].unit, r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+      });
+    });
+    saveFile("fia_custom_" + selectedStates.length + "states.csv", rowsToCsv(headers, body), "text/csv");
+    return;
+  }
+
+  status.textContent = "Fetching county data for " + selectedStates.length + " state" + (selectedStates.length > 1 ? "s" : "") + "…";
+  let results;
+  try {
+    results = await Promise.all(selectedStates.map(st => getCountyData(st).catch(() => [])));
+  } finally {
+    status.textContent = "";
+  }
+  const headers = ["state", "county_fips", "county_name", "stand_size_class", "metric", "unit", "estimate", "se", "se_percent", "plot_count", "report_years"];
+  const body = [];
+  selectedStates.forEach((st, i) => {
+    results[i].filter(r => selectedMetrics.includes(r.metric)).forEach(r => {
+      body.push([st, r.county_fips, r.county_name, r.stand_size_class, r.metric, METRIC_INFO[r.metric].unit, r.estimate, r.se, r.se_percent, r.plot_count, r.report_years]);
+    });
+  });
+  if (!body.length) { toast("No county data came back for that selection."); return; }
+  saveFile("fia_custom_counties_" + selectedStates.length + "states.csv", rowsToCsv(headers, body), "text/csv");
 });
 
 /* ---------------- footer ---------------- */
