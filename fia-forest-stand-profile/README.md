@@ -25,7 +25,7 @@ successional stage — so you can see not just how much wood a state holds, but
 whether it's locked up in young regenerating stands or old mature ones.
 
 **This is a one-time snapshot, not a live feed.** The queries described above
-were run once, on 2026-09-14, and their results are baked into `index.html`
+were last run on 2026-09-19, and their results are baked into `index.html`
 and the `county_json/`/`data/` files below — the published page has no way to
 call the live FIADB-API itself (a static GitHub Pages site can't run the
 Python client), so it can't refresh on its own. Every FIA evaluation on
@@ -110,16 +110,17 @@ result on one map.
 - **Texas and Alaska's regional survey split is a real gotcha, fixed by
   merging, not by picking a side.** Texas's FIA evaluations are named "East"
   (482025, 2019–2025, growth-accounting enabled, 43 counties) and "West"
-  (482013, 2004–2013, 246 counties) — but these are **not** a geographic
-  partition: all 43 East counties are *also* covered by West, at a different,
-  much older vintage. Treating them as two toggle-able "units" (an earlier
-  version of this project did) let the same real county carry two silently
-  different values depending on which was selected — e.g. Angelina County
-  showed one forest-area figure under "East" and a different one under
-  "West". `merge_split_states.py` fixes this at the source: for every
-  (metric, stand-size class, county) cell, it keeps the newer survey's value
-  wherever the newer survey covers that county, and falls back to the older
-  survey only for counties the newer one doesn't reach. State totals are then
+  (currently 482023, 2014–2023, growth-accounting enabled as of this
+  vintage, 244 counties) — but these are **not** a geographic partition:
+  all 43 East counties are *also* covered by West, at a different vintage.
+  Treating them as two toggle-able "units" (an earlier version of this
+  project did) let the same real county carry two silently different values
+  depending on which was selected — e.g. Angelina County showed one
+  forest-area figure under "East" and a different one under "West".
+  `merge_split_states.py` fixes this at the source: for every (metric,
+  stand-size class, county) cell, it keeps the newer survey's value wherever
+  the newer survey covers that county, and falls back to the older survey
+  only for counties the newer one doesn't reach. State totals are then
   *rebuilt from the merged county data* (summed, SE combined as
   `sqrt(sum of squares)`) rather than kept as either original whole-region
   query result, so the state figure and the county map always agree. Alaska
@@ -128,17 +129,27 @@ result on one map.
   one state, each county row keeps its own `report_years` rather than
   asserting one figure for the whole state — the app surfaces this via a
   caveat banner and per-county hover text whenever TX or AK is selected.
-- **Even after merging, growth/removals/mortality still show "No data" for
-  most Texas and Alaska counties — this is a real limit of the source data,
-  not a leftover merge bug.** Those three metrics require growth-accounting,
-  which needs a plot to have been *remeasured* (visited more than once).
-  Checking the pre-merge data directly: Texas-West's growth rows cover
-  exactly the same 43 counties as Texas-East (at older, lower values) — the
-  other 203 counties never had a remeasured plot in either vintage, so
-  there's no fallback value to merge in. Volume, biomass, sawlog, and area
-  don't need remeasurement and cover nearly the whole state in both. The app
-  shows a metric-aware caveat explaining this whenever growth, removals, or
-  mortality is selected for TX or AK.
+  **Gotcha on top of the gotcha:** USDA doesn't keep "West"'s STATE label
+  stable either — every West Texas evaluation since the 2014 vintage is
+  published under the plain label `"Texas"`, not `"Texas(West)"` (that name
+  is frozen at 482013, 2004–2013, and will never gain a newer evaluation).
+  `fia_state_standtype_metrics.py` resolves TX-West against both labels for
+  exactly this reason; matching only the old name would silently freeze this
+  project's West Texas data at 2013 forever, which is exactly what happened
+  until this was caught and fixed.
+- **Growth/removals/mortality coverage differs by state and by vintage, not
+  by a fixed rule** — these three metrics require growth-accounting, which
+  needs a plot to have been *remeasured* (visited more than once), and
+  whether a given evaluation has that enabled is a per-evaluation fact, not
+  a per-state one. Now that West Texas's current evaluation (482023) has
+  growth-accounting enabled, 243 of Texas's 244 merged counties carry
+  growth/removals/mortality data — a real gap only for the one county
+  neither survey covers. Alaska is not so lucky: Alaska Interior's
+  evaluation still has growth-accounting disabled, so only 12 of Alaska's
+  17 counties (the ones Coastal reaches) have GRM data. Volume, biomass,
+  sawlog, and area don't need remeasurement and cover nearly the whole state
+  in both. The app shows a metric-aware caveat explaining this whenever
+  growth, removals, or mortality is selected for TX or AK.
 - The county FIPS parser has a fix baked in for a related but separate API
   quirk: for the 7 states whose FIPS code starts with `0` (AL, AK, AZ, AR,
   CA, CO, CT), the site's own display drops the leading zero from the county

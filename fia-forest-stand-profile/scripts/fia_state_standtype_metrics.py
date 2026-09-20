@@ -17,13 +17,22 @@ keep the GRP1 (stand-size class) subtotal per state/metric.
 
 Texas and Alaska have no combined "most recent" evaluation at the whole-state
 level -- only regional splits, and those splits are NOT the same vintage:
-    Texas(East)      current, 2019-2025      Texas(West)      stale, 2004-2013
+    Texas(East)      current, 2019-2025      Texas(West)      current, 2014-2023
     Alaska Coastal   current, 2015-2022      Alaska Interior  stale, 2014-2019
-Summing those into one "current state" number would silently blend an
-11-25 year old survey into a "current" total, which is misleading. Instead
-each region is emitted as its own row (state="TX-East", "TX-West", etc.)
-with its own report_years, so mismatched vintages stay visible rather than
-being hidden inside a merged total.
+Summing those into one "current state" number would silently blend mismatched
+vintages into one misleading total. Instead each region is emitted as its own
+row (state="TX-East", "TX-West", etc.) with its own report_years, so
+mismatched vintages stay visible rather than being hidden inside a merged
+total.
+
+Confirmed live against /fullreport/parameters/wc (2026-09-19): USDA dropped
+the "Texas(West)" label after EVAL_GRP 482013 (2004-2013) and re-published
+every evaluation since (up through 482023, 2014-2023, GROWTH_ACCT now "Y")
+under the plain state name "Texas" -- not "Texas(West)". An exact-string
+match on "Texas(West)" alone silently stops seeing new evaluations the
+moment USDA renames the bucket, so TX-West is resolved against BOTH labels
+(see SPLIT_STATE_REGIONS / _best_row_for_name below) rather than either one
+alone, so a future rename doesn't quietly freeze this again.
 
 Output: fia_all_states_standtype.csv (long format: state, metric, stand_size_class,
 estimate, se, se_percent, plot_count, report_years).
@@ -59,9 +68,15 @@ STATECD_TO_ABBR = {
 # States with no single combined-state row in /parameters/wc -- only regional
 # splits exist, and (confirmed against the live table) the splits are
 # different vintages. Reported as separate "STATE-Region" rows, never summed.
+#
+# Values are either a single STATE label or a tuple of acceptable aliases for
+# the same region -- TX-West needs both because USDA renamed that bucket from
+# "Texas(West)" to plain "Texas" partway through its evaluation history (see
+# module docstring); matching only the old label would silently stop seeing
+# every evaluation published after the rename.
 SPLIT_STATE_REGIONS = {
     "AK": {"AK-Coastal": "Alaska Coastal", "AK-Interior": "Alaska Interior"},
-    "TX": {"TX-East": "Texas(East)", "TX-West": "Texas(West)"},
+    "TX": {"TX-East": "Texas(East)", "TX-West": ("Texas(West)", "Texas")},
 }
 
 METRICS = {
@@ -111,9 +126,16 @@ def fetch_parameter_rows(param: str, session: requests.Session) -> list[dict]:
     return rows
 
 
-def _best_row_for_name(wc_rows: list[dict], state_name: str) -> dict | None:
-    """Pick the MOST_RECENT='Y' row for state_name, else the newest by EVAL_GRP."""
-    candidates = [r for r in wc_rows if r.get("STATE", "").strip() == state_name]
+def _best_row_for_name(wc_rows: list[dict], state_name: str | tuple[str, ...]) -> dict | None:
+    """Pick the MOST_RECENT='Y' row for state_name, else the newest by EVAL_GRP.
+
+    state_name may be a single STATE label or a tuple of aliases for the same
+    region (e.g. TX-West's "Texas(West)"/"Texas" -- see SPLIT_STATE_REGIONS):
+    USDA has been known to rename a region's STATE label between evaluations,
+    and matching only the old name would silently stop seeing anything newer.
+    """
+    names = (state_name,) if isinstance(state_name, str) else state_name
+    candidates = [r for r in wc_rows if r.get("STATE", "").strip() in names]
     if not candidates:
         return None
     most_recent = [r for r in candidates if r.get("MOST_RECENT") == "Y"]
