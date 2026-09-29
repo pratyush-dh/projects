@@ -155,7 +155,7 @@ I would be glad to hear from people who work with or inside the program:
 
 ## Data and code
 
-Everything here uses the public FIADB (version 9.5, from the [FIA DataMart](https://research.fs.usda.gov/products/dataandtools/fia-datamart)) and can be reproduced: [github.com/pratyush-dh/projects/tree/main/fia-height-htcd2](https://github.com/pratyush-dh/projects/tree/main/fia-height-htcd2). The full figure guide (what each figure shows and how to read it) is in the same folder. If you would rather explore FIA area estimates interactively, see my [US Forest Inventory Explorer](https://pratyush-dh.github.io/projects/fia-forest-stand-profile/). The analysis described in this post is in the `side_htcd2` folder; the volume and biomass part is described in a longer manuscript that is still being reviewed.
+Everything here uses the public FIADB (version 9.5, from the [FIA DataMart](https://research.fs.usda.gov/products/dataandtools/fia-datamart)) and can be reproduced: [github.com/pratyush-dh/projects/tree/main/blog/side_htcd2](https://github.com/pratyush-dh/projects/tree/main/blog/side_htcd2). The full figure guide (what each figure shows and how to read it) is in the same folder. If you would rather explore FIA area estimates interactively, see my [US Forest Inventory Explorer](https://pratyush-dh.github.io/projects/fia-forest-stand-profile/). The analysis described in this post is in the `side_htcd2` folder; the volume and biomass part is described in a longer manuscript that is still being reviewed. The [follow-up post](https://pratyush-dh.github.io/projects/blog/htcd4/) checks the other non-measured category, HTCD 4 ("estimated with a model"), against this same regional model.
 
 ## References
 

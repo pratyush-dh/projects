@@ -9,7 +9,7 @@ src = open("post.md", encoding="utf-8").read()
 # Split H1 title off; the rest becomes the article body.
 m = re.match(r"^# (.+?)\n+\*(.+?)\*\n+(.*)$", src, re.S)
 title_text, subtitle, body_md = m.group(1), m.group(2), m.group(3)
-seo_title = "FIA Tree Height Codes: Crews vs. a Height Model | Pratyush Dhungana"
+seo_title = "FIA's Own Height Model vs an Independent Check | Pratyush Dhungana"
 
 md = markdown.markdown(body_md, extensions=["tables"])
 
@@ -50,11 +50,10 @@ footer.site-foot a{color:#2a78d6}
 @media(max-width:900px){figure{margin:1.6em 0}figcaption{margin:.5em 0 0}}
 """
 
-DESC = ("How the USDA Forest Service's FIA program records tree height (HT, ACTUALHT, HTCD), "
-        "and what happens when a regional height-diameter model trained only on measured trees "
-        "is used to check crews' reconstructed heights for broken-top trees.")
-URL = "https://pratyush-dh.github.io/projects/blog/"
-IMG = URL + "figures/f06_maps_ecodivision_bias.png"
+DESC = ("FIA's own modeled tree heights (HTCD 4) checked against a regional height-diameter model trained only on "
+        "measured trees, and against an independent anchor built from each tree's own measurement history.")
+URL = "https://pratyush-dh.github.io/projects/blog/htcd4/"
+IMG = URL + "figures/g02_maps_ecodivision.png"
 
 html = f"""<!doctype html>
 <html lang="en">
@@ -79,9 +78,8 @@ html = f"""<!doctype html>
 <body>
 <header class="site-nav">
 <a href="https://pratyush-dh.github.io/">&larr; Portfolio</a>
-<a href="https://github.com/pratyush-dh/projects/tree/main/blog">Code &amp; source</a>
-<a href="https://github.com/pratyush-dh/projects/blob/main/blog/figure_guide.md">Figure guide</a>
-<a href="https://pratyush-dh.github.io/projects/blog/htcd4/">Next post (HTCD 4) &rarr;</a>
+<a href="https://pratyush-dh.github.io/projects/blog/">&larr; Previous post (HTCD 2)</a>
+<a href="https://github.com/pratyush-dh/projects/tree/main/blog/side_htcd4">Code &amp; source</a>
 </header>
 <article>
 <h1>{title_text}</h1>
@@ -89,7 +87,7 @@ html = f"""<!doctype html>
 {md}
 </article>
 <footer class="site-foot">
-<p>Draft analysis, not peer reviewed and not an official FIA product. Corrections and questions are welcome: <a href="https://github.com/pratyush-dh/projects/issues">open an issue</a>. Source: <a href="https://github.com/pratyush-dh/projects/tree/main/blog">pratyush-dh/projects</a>. Author: <a href="https://pratyush-dh.github.io/">Pratyush Dhungana</a>.</p>
+<p>Draft analysis, not peer reviewed and not an official FIA product. Corrections and questions are welcome: <a href="https://github.com/pratyush-dh/projects/issues">open an issue</a>. Source: <a href="https://github.com/pratyush-dh/projects/tree/main/blog/side_htcd4">pratyush-dh/projects</a>. Author: <a href="https://pratyush-dh.github.io/">Pratyush Dhungana</a>.</p>
 </footer>
 </body>
 </html>
