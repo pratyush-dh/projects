@@ -1,0 +1,64 @@
+{
+ "n": 190356,
+ "n_states": 16,
+ "n_divisions": 25,
+ "share_species_division_tier": 0.9954768959213264,
+ "old_ht": {
+  "count": 190356.0,
+  "mean": 61.0,
+  "std": 40.2,
+  "min": 5.0,
+  "25%": 34.0,
+  "50%": 50.0,
+  "75%": 78.0,
+  "max": 277.0
+ },
+ "new_ht": {
+  "count": 190356.0,
+  "mean": 59.4,
+  "std": 37.1,
+  "min": 5.7,
+  "25%": 34.4,
+  "50%": 49.2,
+  "75%": 74.7,
+  "max": 207.6
+ },
+ "n_old_gt_200": 1079,
+ "n_new_gt_200": 131,
+ "overall": {
+  "bias_pct": 0.824590333396058,
+  "ci_pct": [
+   0.5183550399514347,
+   1.1112852891310476
+  ],
+  "bias_ft": 1.638993407325676,
+  "sd_lr": 0.20627318630657732
+ },
+ "core3_n": 188965,
+ "core3_share": 0.9926926390552439,
+ "core3_bias_pct": 0.8829225514442651,
+ "other_states_n": 1391,
+ "other_states_bias_pct": -6.7942177955187315,
+ "n_divisions_significant": 6,
+ "n_divisions_tested": 13,
+ "heldout_by_model": [
+  {
+   "model": "reg",
+   "bias_pct": -2.793,
+   "lo": -2.959,
+   "hi": -2.614
+  },
+  {
+   "model": "nat",
+   "bias_pct": -2.541,
+   "lo": -2.723,
+   "hi": -2.347
+  },
+  {
+   "model": "cor",
+   "bias_pct": -0.965,
+   "lo": -1.13,
+   "hi": -0.784
+  }
+ ]
+}
