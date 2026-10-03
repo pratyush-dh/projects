@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Carbon-by-ecoregion, step 3: how much of each division's live-tree carbon total rests on a field-measured height
+"""Carbon-by-ecoregion, step 3: design-weighted share of each division's live-tree carbon that rests on a field-measured height
 (HTCD 1) vs. a crew reconstruction (HTCD 2/3) or FIA's own model (HTCD 4) -- the connector to the first two posts
 in this series. Reuses the same plot set and per-tree weighting as 01_extract.py, adding HTCD.
 -> out/t3_carbon_by_htcd_division.csv
@@ -17,9 +17,9 @@ import sqlite3
 c = sqlite3.connect("file:../SQLite_FIADB_ENTIRE/SQLite_FIADB_ENTIRE.db?mode=ro", uri=True)
 ppsa = pd.read_sql("SELECT CN, STRATUM_CN, PLT_CN, STATECD, EVALID FROM POP_PLOT_STRATUM_ASSGN WHERE EVALID IN (%s)" %
                    ",".join(map(str, latest_evalids)), c)
-ps = pd.read_sql("SELECT CN AS STRATUM_CN2, ADJ_FACTOR_SUBP, ADJ_FACTOR_MICR FROM POP_STRATUM", c)
+ps = pd.read_sql("SELECT CN AS STRATUM_CN2, EXPNS, ADJ_FACTOR_SUBP, ADJ_FACTOR_MICR FROM POP_STRATUM", c)
 ppsa = ppsa.merge(ps, left_on="STRATUM_CN", right_on="STRATUM_CN2", how="left").drop_duplicates("PLT_CN")
-pmap = ppsa.set_index("PLT_CN")[["ADJ_FACTOR_SUBP", "ADJ_FACTOR_MICR"]]
+pmap = ppsa.set_index("PLT_CN")[["ADJ_FACTOR_SUBP", "ADJ_FACTOR_MICR", "EXPNS"]]
 plots = set(ppsa.PLT_CN.tolist())
 log(f"{len(plots):,} plots on the latest evaluations")
 
@@ -34,7 +34,7 @@ log(f"{len(tree):,} live trees")
 tree = tree.join(pmap, on="PLT_CN")
 tree["adj"] = np.where(tree.DIA < 5, tree.ADJ_FACTOR_MICR, tree.ADJ_FACTOR_SUBP)
 tree["wa"] = tree.TPA_UNADJ.fillna(0) * tree.adj.fillna(0)
-tree["carbon_w"] = (tree.CARBON_AG.fillna(0) + tree.CARBON_BG.fillna(0)) * tree.wa
+tree["carbon_w"] = (tree.CARBON_AG.fillna(0) + tree.CARBON_BG.fillna(0)) * tree.wa * tree.EXPNS
 tree["measured"] = np.where(tree.HTCD == 1, "measured (HTCD 1)", np.where(tree.HTCD.isin([2, 3]), "crew estimate (HTCD 2/3)",
                                                                           np.where(tree.HTCD == 4, "FIA modeled (HTCD 4)", "missing/other")))
 

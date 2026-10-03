@@ -50,7 +50,7 @@ footer.site-foot a{color:#2a78d6}
 @media(max-width:900px){figure{margin:1.6em 0}figcaption{margin:.5em 0 0}}
 """
 
-DESC = ("Live-tree carbon density varies 28-fold across US ecoregions, a statistically robust difference -- "
+DESC = ("Live-tree carbon density varies about 29-fold across US ecoregions, a statistically robust difference -- "
         "and a look at why the within-region uncertainty is unexpectedly high connects back to this series' "
         "earlier posts on FIA tree height data.")
 URL = "https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/"
