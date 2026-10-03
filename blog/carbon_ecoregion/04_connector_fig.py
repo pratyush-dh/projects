@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-"""Carbon-by-ecoregion, step 4: the connector figure for the blog post -- for the 12 highest-carbon-density
-divisions (same order as fig2), what share of that carbon rests on a field-measured height vs. a crew estimate
+"""Carbon-by-ecoregion, step 4: the connector figure for the blog post -- for the 12 highest design-weighted
+carbon-density divisions (ranked by out/d2_division_design.csv), what share of that carbon rests on a field-measured height vs. a crew estimate
 (HTCD 2/3, Part 1 of this series) vs. FIA's own model (HTCD 4, Part 2)."""
 import pandas as pd
 from plotnine import (ggplot, aes, geom_col, geom_text, labs, scale_fill_manual, scale_y_continuous,
@@ -8,9 +8,10 @@ from plotnine import (ggplot, aes, geom_col, geom_text, labs, scale_fill_manual,
 
 BLUE, ORANGE, GREY, INK, MUTE, GRID = "#2a78d6", "#eb6834", "#8a8a86", "#0b0b0b", "#52514e", "#e6e5e1"
 
-t1 = pd.read_csv("out/t1_division_summary.csv")
+d2 = pd.read_csv("out/d2_division_design.csv")
 t3 = pd.read_csv("out/t3_carbon_by_htcd_division.csv")
-m = t1[t1.included_in_tests].merge(t3[["division", "measured_pct", "crew estimate_pct", "FIA modeled_pct"]], on="division")
+m = d2[d2.n_forest >= 100].rename(columns={"mean_tC_per_acre": "mean"})
+m = m.merge(t3[["division", "measured_pct", "crew estimate_pct", "FIA modeled_pct"]], on="division")
 m = m.sort_values("mean", ascending=False).head(12)
 
 cat_order = ["Field-measured (HTCD 1)", "Crew estimate (HTCD 2/3, Part 1)", "FIA modeled (HTCD 4, Part 2)"]

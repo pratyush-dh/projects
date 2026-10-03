@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Carbon-by-ecoregion, step 2: is live-tree carbon density (tons C/acre) different across Cleland ecodivisions, and
+"""Carbon-by-ecoregion, step 2 (unweighted plot-level tests and descriptives; design-based estimates are in 05-08): is live-tree carbon density (tons C/acre) different across Cleland ecodivisions, and
 is that difference statistically defensible given (a) the FIA sample design and (b) the fact that per-plot carbon
 density is strongly right-skewed and heteroscedastic across regions?
 
@@ -198,11 +198,11 @@ save(fig, "fig1_boxplot_by_division")
 
 # ---------------------------------------------------------------- Table 2 (replaces the old Fig 2 plot): ranked mean +/- 95% CI
 desc_t = desc[desc.included_in_tests].sort_values("mean", ascending=False).reset_index(drop=True)
-with open("out/t2_ranked_means_ci.md", "w", encoding="utf-8") as f:
+with open("out/t2_unweighted_ranked_means_ci.md", "w", encoding="utf-8") as f:
     f.write("| Division | Name | n plots | Mean (tons C/acre) | 95% CI |\n|---|---|---|---|---|\n")
     for r in desc_t.itertuples():
         f.write(f"| {r.division} | {r.division_name} | {r.n:,.0f} | {r.mean:.1f} | {r.ci_lo:.1f}–{r.ci_hi:.1f} |\n")
-desc_t.to_csv("out/t2_ranked_means_ci.csv", index=False)
+desc_t.to_csv("out/t2_unweighted_ranked_means_ci.csv", index=False)
 print(f"wrote out/t2_ranked_means_ci.md ({len(desc_t)} rows)")
 
 # ---------------------------------------------------------------- Fig 5: CV by division, x-axis sorted by n ascending
@@ -213,7 +213,7 @@ ax.set_xticks(pos, order, fontsize=7.5, rotation=90)
 ax.set_xlabel("Ecodivision (sorted by number of forested plots, ascending)")
 ax.set_ylabel("Coefficient of variation (sd / mean)")
 ax.set_title("Coefficient of variation of carbon density by ecodivision, sorted by sample size", pad=8)
-save(fig, "fig5_variance_by_division")
+save(fig, "fig5_unweighted_cv_by_division")
 
 # ---------------------------------------------------------------- Fig 6: CV vs. number of plots, with trend (does CV fall as n grows?)
 n_vals = np.array([dvn.loc[dv, "n"] for dv in order])
@@ -232,7 +232,7 @@ ax.set_ylabel("Coefficient of variation (sd / mean)")
 ax.set_title("Coefficient of variation vs. number of plots, by ecodivision", pad=8)
 ax.text(0.98, 0.97, f"Pearson r = {r_pearson:.2f} (log n vs. CV), p = {p_pearson:.3f}\nfitted line: OLS of CV on log(n)",
         transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=MUTE)
-save(fig, "fig6_cv_vs_nplots")
+save(fig, "fig6_unweighted_cv_vs_nplots")
 print(f"CV vs log(n): Pearson r={r_pearson:.3f}, p={p_pearson:.4f}")
 
 # ---------------------------------------------------------------- Fig 7: CV at the ecodivision level vs. the state level
@@ -268,7 +268,7 @@ ax.set_ylabel("Coefficient of variation (sd / mean)")
 ax.set_title("Carbon-density CV: ecodivision level vs. state level", pad=8)
 ax.text(0.98, 0.02, f"Mann-Whitney p = {mw_p:.3f}\nmedians: {np.median(div_cv):.2f} vs. {np.median(st_cv):.2f}",
         transform=ax.transAxes, ha="right", va="bottom", fontsize=8.5, color=MUTE)
-save(fig, "fig7_cv_division_vs_state")
+save(fig, "fig7_unweighted_cv_division_vs_state")
 state_desc.to_csv("out/t3_state_cv.csv", index=False)
 
 # ---------------------------------------------------------------- Fig 3: map
@@ -297,5 +297,5 @@ ax.set_axis_off(); ax.set_aspect("equal"); ax.set_xlim(XMIN - 5e4, XMAX + 5e4); 
 ax.set_title("Mean live-tree carbon density by ecodivision", pad=8)
 cb = fig.colorbar(plt.cm.ScalarMappable(norm=norm, cmap=SEQ), ax=ax, orientation="horizontal", shrink=0.55, pad=0.01, aspect=30, extend="max")
 cb.set_label("Tons C / acre (forested plots)", fontsize=9)
-save(fig, "fig3_map_mean_carbon")
+save(fig, "fig3_unweighted_map_mean_carbon")
 print("done")

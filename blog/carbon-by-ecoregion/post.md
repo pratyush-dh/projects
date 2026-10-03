@@ -2,45 +2,67 @@
 
 *Understanding FIA data, part 3: carbon density by ecoregion*
 
-The first and second posts in this series asked a narrow question: how trustworthy are the tree heights in FIA's database when they weren't actually measured in the field? This post asks something different with the same database — how much live-tree carbon does an acre of forest actually hold, and does that number really differ from one U.S. ecoregion to the next, or could the apparent differences just be noise? Across 125,123 forested plots and 35 Cleland ecodivisions, the answer is yes: carbon density varies 28-fold, from 2.8 to 76.8 tons C/acre, and that difference holds up across four distribution-robust statistical tests. A second question turned out to matter just as much, though: the uncertainty around each region's estimate is itself unusually large, and tracing why connects directly back to the first two posts — the regions holding the most carbon turn out to be the same ones this series already found lean hardest on modeled, rather than measured, tree heights.
+The [first](https://pratyush-dh.github.io/projects/blog/) and [second](https://pratyush-dh.github.io/projects/blog/htcd4/) posts in this series asked a narrow question: how trustworthy are the tree heights in FIA's database when they weren't actually measured in the field? This post asks something different with the same database. How much live-tree carbon does an acre of forest actually hold, and does that number really differ from one U.S. ecoregion to the next, or could the apparent differences just be noise? Using FIA's own post-stratification weights across 125,123 forested plots and 35 Cleland ecodivisions, the answer is yes. Design-based carbon density varies about 29-fold, from 2.6 to 75.4 tons of carbon per acre, and that difference holds up across four distribution-robust statistical tests. A second question turned out to matter just as much: the spread within each region is unusually large, and tracing why connects back to the first two posts. The regions holding the most carbon are the ones this series already found lean hardest on modeled, rather than measured, tree heights.
+
+Two terms appear throughout. The **coefficient of variation (CV)** is the standard deviation divided by the mean, so it measures spread relative to the average; a CV of 0.8 means a typical plot differs from the average by about 80% of that average. The **design-weighted** version uses FIA's own expansion weights, which say how many acres each plot stands for. A glossary of all technical terms, with links to learn more, is at the end.
 
 ## 1. Introduction
 
-Two preceding posts in this series examined the reliability of tree height measurements in the FIA database when a field measurement was not available: Part 1 compared crew-reconstructed heights on broken-top trees (height method code, HTCD, 2–3) against a regional height-diameter model trained only on field-measured trees (HTCD 1); Part 2 examined FIA's own internally modeled heights (HTCD 4) against the same regional model and against an independent remeasurement-based benchmark. Both posts are available at [pratyush-dh.github.io/projects/blog/](https://pratyush-dh.github.io/projects/blog/) and [pratyush-dh.github.io/projects/blog/htcd4/](https://pratyush-dh.github.io/projects/blog/htcd4/), respectively.
+Two preceding posts in this series examined the reliability of tree height measurements in the [Forest Inventory and Analysis (FIA)](https://www.fia.fs.usda.gov/tools-data/) database when a field measurement was not available. [Part 1](https://pratyush-dh.github.io/projects/blog/) compared crew-reconstructed heights on broken-top trees (height method code, HTCD, 2–3) against a regional height-diameter model trained only on field-measured trees (HTCD 1). [Part 2](https://pratyush-dh.github.io/projects/blog/htcd4/) examined FIA's own internally modeled heights (HTCD 4) against the same regional model and against an independent remeasurement-based benchmark.
 
-The present analysis addresses a different question using the same database: does live-tree carbon density, as computed by FIA's National Scale Volume and Biomass (NSVB) pipeline, vary meaningfully across ecological regions of the United States, and if so, how precisely can that variation be characterized? This question is relevant to any application that compares carbon density across regions — land management planning, carbon-offset valuation, or benchmarking a given forest stand against regional norms — and it requires two distinct lines of evidence: (1) whether the regional differences in the mean are statistically defensible given the distributional properties of the data, and (2) whether the uncertainty attached to each regional estimate is itself well understood. The second question turns out to connect directly back to the height-measurement issues examined in Parts 1 and 2.
+The present analysis addresses a different question using the same database. Does live-tree carbon density, as computed by FIA's [National Scale Volume and Biomass (NSVB)](https://research.fs.usda.gov/programs/fia/nsvb) pipeline, vary meaningfully across ecological regions of the United States, and if so, how precisely can that variation be characterized? This matters for any application that compares carbon density across regions, such as land management planning, carbon-offset valuation, or benchmarking a forest stand against regional norms. It requires two lines of evidence: (1) whether the regional differences in the mean are statistically defensible given the distributional properties of the data, and (2) whether the uncertainty attached to each regional estimate is itself well understood. The second question connects directly back to the height-measurement issues examined in Parts 1 and 2.
 
-Section 2 describes the data, unit of analysis, and statistical methods. Section 3 presents the omnibus and post-hoc test results, the ranked carbon density estimates, and the investigation into within-division uncertainty. Section 4 discusses the connection to tree-height measurement method. Section 5 states the limitations of the analysis, and Section 6 concludes.
+Section 2 describes the data, unit of analysis, and estimation methods. Section 3 presents the results: the distributional and test results, the design-based estimates by ecodivision, the spread analysis, and the aggregation checks. Section 4 discusses the connection to tree-height measurement method. Section 5 states the limitations, Section 6 concludes, and a glossary follows.
 
 ## 2. Data and Methods
 
 ### 2.1 Data source and scope
 
-Live-tree carbon density was computed from `TREE.CARBON_AG` and `TREE.CARBON_BG` (FIA's NSVB-derived aboveground and belowground carbon estimates for live trees), summed per plot and converted to tons per acre. This analysis is restricted to **live-tree carbon only**; soil organic carbon, standing and downed dead wood, litter, and understory vegetation carbon are reported by FIA at the condition level but are not included here. Each state's most recent EXPCURR inventory evaluation was used, consistent with the rest of this series; because states reach their most recent evaluation in different years, this reflects each state's own latest cycle rather than a single fixed national year.
+Carbon density was computed from `TREE.CARBON_AG` and `TREE.CARBON_BG`, FIA's aboveground and belowground carbon estimates for live trees, summed per plot and converted to tons per acre. The analysis is restricted to **live-tree carbon only**. Soil organic carbon, standing and downed dead wood, litter, and understory vegetation carbon are reported by FIA at the condition level but are not included. Each state's most recent current-inventory evaluation (EXPCURR) was used. Because states reach their latest evaluation in different years, the national figures combine each state's own latest cycle rather than one fixed year. The public data are the [FIADB database](https://www.fia.fs.usda.gov/tools-data/), and national and state estimates can be reproduced with FIA's [EVALIDator tool](https://www.fia.fs.usda.gov/tools-data/).
 
-Plots were assigned to one of 35 Cleland ecodivisions using a spatial join with the EcoMap division layer. Alaska, Hawaii, and the U.S. territories are excluded, as this layer does not cover them. Of 313,178 plots with an assigned ecodivision, 125,123 are forested (carbon density > 0) and form the analytic sample. One division (code 262, n = 21) falls below a minimum sample size of 100 forested plots and is reported descriptively but excluded from the significance tests.
+Plots were assigned to one of 35 Cleland ecodivisions (Cleland et al., 2007) by spatial overlap with the ecodivision layer. Of 334,046 plots on the latest evaluations, 313,178 fall inside an ecodivision. Of those, 125,123 are forested (live-tree carbon greater than zero), which is the analytic sample for the ecodivision estimates. Another 3,666 forested plots lie outside any division (Alaska, Hawaii, Pacific island inventories, and plots inside the layer's water polygons); they are included in the national totals but not in the ecodivision tables. One division (code 262, n = 21) falls below a minimum of 100 forested plots and is reported descriptively only.
 
-### 2.2 Unit of analysis and weighting
+### 2.2 Design-based estimation
 
-The unit of analysis is the **forested plot**, not the individual tree: every live tree's carbon value on a plot is weighted by `TPA_UNADJ × ADJ_FACTOR` (micro-plot or subplot adjustment factor, depending on diameter) and summed to a single plot-level density, following the per-plot weighting convention used throughout this project. Aggregating at the plot level prevents within-plot correlation among trees from artificially inflating the effective sample size in the statistical tests below.
+FIA samples the country with a systematic grid of plots, and the plots are grouped into **strata** (groups with the same sampling intensity). Each stratum carries an **expansion factor** (`EXPNS`), the number of acres each plot in that stratum represents. Summing these expansions over the plots gives estimates for the whole country, which is the purpose of FIA's **post-stratified** estimation design (Bechtold and Patterson, 2005; Scott et al., 2005). The point estimates and variances here follow the same convention the project already uses for national and state totals.
 
-FIA's base plot grid is an equal-probability systematic sample, so an unweighted mean across a division's plots is a valid estimator of that division's mean density; the stratum expansion factor (`EXPNS`), which scales a sample to a population *total*, is not required for a density comparison. As a sensitivity check, each division's `EXPNS`-weighted mean was also computed and agrees with the unweighted mean within 10.5 percentage points in every division, typically substantially closer.
+For a set of plots with per-acre values \(y_j\) (tons C per acre of plot), in stratum \(h\) with \(n_h\) plots, the total is
 
-### 2.3 Statistical methods
+\[
+\hat{Y} = \sum_h \mathrm{EXPNS}_h \sum_{j \in h} y_j
+\]
 
-Plot-level carbon density is strongly right-skewed and markedly heteroscedastic across ecodivisions (standard deviation ranges from 3.6 to 63 tons/acre). A Levene's test (Brown-Forsythe, median-centered) confirmed unequal variances (p < 10⁻³⁰⁰), violating the equal-variance assumption of classical one-way ANOVA. Consequently, four omnibus tests were run in parallel: Welch's ANOVA (the primary test, robust to unequal variances), Kruskal-Wallis (rank-based, distribution-free), classical Fisher ANOVA (reported for comparison only, given the violated assumption), and Welch's ANOVA repeated on log1p-transformed density (as a robustness check on the raw scale's skew).
+and its variance is
 
-Pairwise regional comparisons were conducted using two post-hoc procedures appropriate to the primary tests: Games-Howell (paired with Welch's ANOVA; valid under unequal variances and unequal group sizes) and Dunn's test with Holm step-down correction (paired with Kruskal-Wallis; rank-based, distribution-free), applied across all 595 pairs of the 35 included divisions.
+\[
+V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_h W_h s_h^2 + \frac{1}{n^2} \sum_h (1 - W_h)\, s_h^2 \right],
+\]
 
-To investigate the precision of division-level estimates (Section 3.4), the same 125,123 forested plots were independently regrouped by U.S. state, and the coefficient of variation (CV = SD/mean) was computed for each grouping. A two-sample Mann-Whitney U test compared the distribution of division-level CVs (n = 35) against the distribution of state-level CVs (n = 48 states with ≥ 100 forested plots). The relationship between CV and sample size was further characterized via the Pearson correlation between CV and log(n).
+where \(A = \sum_h \mathrm{EXPNS}_h n_h\) is the total area, \(W_h = \mathrm{EXPNS}_h n_h / A\), \(n = \sum_h n_h\), and \(s_h^2\) is the plot-to-plot variance within stratum \(h\).
+
+The quantity reported for each ecodivision or state is the **mean carbon density per forested acre**, the ratio of carbon total to forested area, where the forested-area total uses the same estimator with a forest indicator in place of carbon. Its variance comes from a standard delta-method (first-order Taylor) approximation to that ratio. A 95% confidence interval is the estimate ±1.96 standard errors. Ecodivision domains are handled with domain indicators, so each division's estimate uses the full sampling design rather than just its own plots.
+
+### 2.3 Spread (coefficient of variation)
+
+The spread of plot values within a domain is measured by the coefficient of variation, CV = standard deviation ÷ mean. The **design-weighted CV (wCV)** computes the mean and standard deviation with each plot weighted by its `EXPNS`, so that plots representing more acres count more. This is the spread a user would see across the forested acres of a domain, rather than across plots treated equally.
+
+### 2.4 Statistical tests
+
+Plot-level carbon density is strongly right-skewed and its variance differs markedly across ecodivisions, so classical one-way ANOVA is not suitable. A Levene's test (Brown–Forsythe version, Brown and Forsythe, 1974) checks for unequal variances. Four omnibus tests of mean differences were run in parallel: Welch's ANOVA (Welch, 1951), which does not assume equal variances; the Kruskal–Wallis test (Kruskal and Wallis, 1952), which uses ranks; Fisher's classical ANOVA, reported only for comparison; and Welch's ANOVA on log1p-transformed values, a check on the skew. Pairwise differences were assessed with Games–Howell (Games and Howell, 1976) and Dunn's test with Holm correction (Dunn, 1964; Holm, 1979). The omnibus and pairwise tests use unweighted plot values, since they describe distribution shape and separation, while all means, intervals, and spread values reported in the results use design weights.
+
+To compare spread between levels, the division-level and state-level wCV values were compared with a Mann–Whitney U test (Mann and Whitney, 1947), and the relationship between CV and plot count was described with a Pearson correlation on log(n).
+
+### 2.5 Checks on FIA's aggregation
+
+Because the design estimates are built plot by plot, the state totals, the ecodivision totals, and the national total should match exactly. This was tested directly. A second check recomputed the national total separately for aboveground and belowground carbon, and compared the aboveground figure to a published national value.
 
 ## 3. Results
 
-### 3.1 Omnibus tests
+### 3.1 Distributions and omnibus tests
 
-All four omnibus tests reject the null hypothesis of no difference in mean carbon density across ecodivisions, and they agree closely in effect size (Table 1).
+Plot-level carbon density differs across ecodivisions in both level and spread (Figure 1). Table 1 reports all four omnibus tests on unweighted plot values. Levene's test rejects equal variances, and each of the four omnibus tests of means rejects equal means across ecodivisions, with effect sizes that agree. Ecodivision accounts for about one-fifth of total plot-to-plot variance (partial η² ≈ 0.22), which is large by conventional standards (Cohen, 1988), and the conclusion does not depend on the distributional assumptions.
 
-**Table 1.** Omnibus test results for carbon density by ecodivision.
+**Table 1.** Omnibus tests of carbon density across ecodivisions (unweighted plot values).
 
 | Test | Assumption | Result |
 |---|---|---|
@@ -50,116 +72,200 @@ All four omnibus tests reject the null hypothesis of no difference in mean carbo
 | Classical (Fisher) ANOVA | Equal variances (violated) | F(34, 125067) = 1034, p < 10⁻³⁰⁰, η² = 0.219 — comparison only |
 | Welch's ANOVA, log1p scale | Robust to raw-scale skew | F = 1395, p < 10⁻³⁰⁰, partial η² = 0.242 |
 
-Ecodivision accounts for approximately one-fifth of total plot-to-plot variance in carbon density (partial η² ≈ 0.22), a large effect by conventional standards (Cohen, 1988), and the conclusion is invariant to distributional assumptions, transformation, or the equal-variance violation.
+Of the 595 pairs of divisions, 540 (90.8%) differ at p < 0.05 under Games–Howell correction, and 530 (89.1%) under Dunn–Holm correction. The two procedures agree closely. The few non-significant pairs are mostly neighbors in the ranking or involve division 261, which has the smallest sample tested (172 plots).
 
-Figure 1 displays the full distribution by division.
+![Figure 1. Plot-level carbon density by ecodivision, ranked by sample size (n, labeled above each violin). Violin width shows the distribution, and the white line marks the median. Values are unweighted plot values; points beyond the Tukey fences (1.5 × IQR) are trimmed for readability.](figures/h01_boxplot_by_division.png)
 
-![Figure 1. Carbon density by ecodivision, ranked by sample size (n, labeled above each violin): violin width shows the distribution, the white line the median. Points beyond the Tukey fences (1.5×IQR) are trimmed for readability.](figures/h01_boxplot_by_division.png)
+### 3.2 Design-based carbon density by ecodivision
 
-### 3.2 Post-hoc pairwise comparisons
+With FIA's expansion weights, mean carbon density ranges from 2.6 tons C per forested acre in division 321 (Tropical/Subtropical Steppe) to 75.4 tons in division 263 (Mediterranean, central California coast), a spread of about 29-fold. Figure 2 maps the design-based means. Pacific coast conifer forest and the Appalachian and Northeastern divisions carry the highest density; semi-arid divisions in the Southwest and southern Plains carry the lowest.
 
-Of 595 pairwise division comparisons, 540 (90.8%) are significant at p < 0.05 under Games-Howell correction, and 530 (89.1%) under Dunn-Holm correction — close agreement between a parametric and a rank-based procedure. The minority of non-significant pairs are predominantly adjacent divisions in the overall ranking, or involve the division with the smallest tested sample (n = 172).
+![Figure 2. Design-based mean live-tree carbon density per forested acre by ecodivision. Division boundaries are outlined in dark grey; state boundaries are light grey for reference. Labels are division codes.](figures/h03_map_mean_carbon.png)
 
-### 3.3 Mean carbon density by ecodivision
+Table 2 gives the design-based estimates with 95% confidence intervals and the design-weighted spread (wCV) for each division. The 35 divisions above the line met the 100-plot threshold for inclusion in the tests. Division 262 is shown below the line for completeness.
 
-Mean carbon density ranges from 2.8 tons/acre (division 321, Tropical/Subtropical Steppe) to 76.8 tons/acre (division 263, Mediterranean climate, central California coast) — a 28-fold range. The spatial pattern (Figure 2) follows established forest-carbon geography: Pacific coast conifer forest and the Appalachian/Northeastern divisions carry the highest density; semi-arid divisions of the Southwest and southern Plains carry the lowest. Table 2 reports the full ranked estimates with 95% confidence intervals.
+**Table 2.** Design-based mean live-tree carbon density by ecodivision (tons C per forested acre), ranked highest to lowest, with 95% confidence intervals and design-weighted spread (wCV).
 
-**Table 2.** Ranked mean carbon density by ecodivision with 95% confidence intervals (highest to lowest). Divisions above the line met the minimum-sample-size criterion for inclusion in the significance tests (n ≥ 100); division 262 is reported separately below the line.
+| Division | Name | Forested plots (n) | Mean (tons C per forested acre) | 95% CI | Spread (wCV) |
+|---|---|---|---|---|---|
+| 263 | Mediterranean | 434 | 75.4 | 69.9–80.9 | 0.82 |
+| M242 | Marine | 9,371 | 58.4 | 57.4–59.4 | 0.90 |
+| 242 | Marine | 566 | 46.1 | 43.1–49.2 | 0.84 |
+| M221 | Hot Continental | 5,882 | 43.5 | 42.9–44.1 | 0.55 |
+| 261 | Mediterranean | 172 | 40.8 | 33.5–48.2 | 1.27 |
+| M261 | Mediterranean | 5,403 | 39.0 | 38.1–40.0 | 1.08 |
+| 221 | Hot Continental | 6,101 | 37.8 | 37.3–38.4 | 0.64 |
+| M211 | Warm Continental | 3,887 | 34.9 | 34.3–35.4 | 0.54 |
+| 211 | Warm Continental | 4,132 | 34.7 | 34.1–35.3 | 0.61 |
+| 231 | Subtropical | 13,583 | 32.4 | 32.1–32.8 | 0.67 |
+| 223 | Hot Continental | 6,441 | 31.3 | 30.8–31.7 | 0.64 |
+| M223 | Hot Continental | 561 | 30.4 | 29.1–31.6 | 0.52 |
+| M333 | Temperate Desert | 3,645 | 30.0 | 29.3–30.8 | 0.82 |
+| 234 | Subtropical | 1,473 | 29.3 | 28.3–30.4 | 0.75 |
+| M231 | Subtropical | 979 | 27.7 | 26.8–28.6 | 0.58 |
+| 232 | Subtropical | 14,727 | 27.6 | 27.3–27.9 | 0.76 |
+| 222 | Hot Continental | 4,780 | 27.5 | 26.8–28.1 | 0.82 |
+| 212 | Warm Continental | 12,445 | 26.1 | 25.7–26.4 | 0.70 |
+| 251 | Prairie | 2,252 | 22.8 | 22.1–23.5 | 0.78 |
+| M332 | Temperate Desert | 6,120 | 21.9 | 21.4–22.4 | 0.91 |
+| 411 | Savannah | 138 | 19.7 | 17.1–22.3 | 0.94 |
+| M331 | Temperate Desert | 5,997 | 17.3 | 16.9–17.6 | 0.87 |
+| 255 | Prairie | 1,316 | 15.6 | 15.0–16.2 | 0.78 |
+| M334 | Temperate Desert | 362 | 14.6 | 13.6–15.6 | 0.74 |
+| 332 | Temperate Steppe | 551 | 12.0 | 11.0–13.0 | 1.08 |
+| M313 | Tropical/Subtropical Steppe | 2,060 | 11.6 | 11.1–12.1 | 1.12 |
+| M262 | Mediterranean | 328 | 10.2 | 9.0–11.4 | 1.15 |
+| 331 | Temperate Steppe | 1,339 | 8.8 | 8.3–9.3 | 1.15 |
+| M341 | Temperate Desert | 2,240 | 8.6 | 8.3–9.0 | 0.94 |
+| 342 | Temperate Desert | 1,111 | 8.4 | 7.8–8.9 | 1.28 |
+| 313 | Tropical/Subtropical Steppe | 3,172 | 8.2 | 7.9–8.5 | 1.15 |
+| 341 | Temperate Desert | 2,060 | 7.3 | 6.9–7.6 | 1.18 |
+| 322 | Tropical/Subtropical Desert | 400 | 4.6 | 4.1–5.0 | 1.09 |
+| 315 | Tropical/Subtropical Steppe | 300 | 2.7 | 2.4–3.0 | 1.22 |
+| 321 | Tropical/Subtropical Steppe | 774 | 2.6 | 2.2–2.9 | 2.06 |
+| *262* | *Mediterranean* | *21* | *13.0* | *6.9–19.1* | *1.13* |
 
-| Division | Name | n plots | Mean (tons C/acre) | 95% CI |
-|---|---|---|---|---|
-| 263 | Mediterranean | 434 | 76.8 | 70.9–82.8 |
-| M242 | Marine | 9,371 | 64.2 | 63.1–65.4 |
-| 242 | Marine | 566 | 51.5 | 48.0–55.1 |
-| M221 | Hot Continental | 5,882 | 45.9 | 45.3–46.6 |
-| M261 | Mediterranean | 5,403 | 43.0 | 41.8–44.2 |
-| 261 | Mediterranean | 172 | 40.9 | 33.2–48.6 |
-| 221 | Hot Continental | 6,101 | 37.7 | 37.1–38.4 |
-| M211 | Warm Continental | 3,887 | 35.3 | 34.7–35.8 |
-| 211 | Warm Continental | 4,132 | 35.0 | 34.3–35.6 |
-| 231 | Subtropical | 13,583 | 33.0 | 32.7–33.4 |
-| 223 | Hot Continental | 6,441 | 32.1 | 31.6–32.6 |
-| M333 | Temperate Desert | 3,645 | 31.1 | 30.3–31.9 |
-| M223 | Hot Continental | 561 | 30.4 | 29.1–31.8 |
-| 234 | Subtropical | 1,473 | 29.4 | 28.3–30.5 |
-| 232 | Subtropical | 14,727 | 28.2 | 27.8–28.5 |
-| M231 | Subtropical | 979 | 27.8 | 26.8–28.8 |
-| 212 | Warm Continental | 12,445 | 26.1 | 25.8–26.5 |
-| 222 | Hot Continental | 4,780 | 25.5 | 24.9–26.1 |
-| M332 | Temperate Desert | 6,120 | 23.6 | 23.1–24.1 |
-| 251 | Prairie | 2,252 | 22.1 | 21.4–22.8 |
-| 411 | Savannah | 138 | 19.8 | 16.7–22.9 |
-| M331 | Temperate Desert | 5,997 | 17.5 | 17.1–17.9 |
-| 255 | Prairie | 1,316 | 15.5 | 14.8–16.1 |
-| M334 | Temperate Desert | 362 | 14.5 | 13.4–15.6 |
-| M313 | Tropical/Subtropical Steppe | 2,060 | 12.3 | 11.7–12.9 |
-| 332 | Temperate Steppe | 551 | 11.8 | 10.7–12.9 |
-| M262 | Mediterranean | 328 | 10.2 | 8.9–11.5 |
-| 331 | Temperate Steppe | 1,339 | 9.0 | 8.4–9.5 |
-| M341 | Temperate Desert | 2,240 | 8.6 | 8.3–9.0 |
-| 342 | Temperate Desert | 1,111 | 8.4 | 7.8–9.0 |
-| 313 | Tropical/Subtropical Steppe | 3,172 | 8.4 | 8.0–8.7 |
-| 341 | Temperate Desert | 2,060 | 7.1 | 6.8–7.5 |
-| 322 | Tropical/Subtropical Desert | 400 | 4.7 | 4.2–5.2 |
-| 315 | Tropical/Subtropical Steppe | 300 | 2.8 | 2.4–3.2 |
-| 321 | Tropical/Subtropical Steppe | 774 | 2.8 | 2.4–3.2 |
-| *262* | *Mediterranean* | *21* | *13.3* | *6.6–20.0 (n below inclusion threshold)* |
+Design weighting changes several means, and the change is informative. Division M242 (Marine) falls from 64.2 tons per acre when plots are averaged equally to 58.4 when each plot is weighted by the acres it represents. Division 242 (Marine) falls from 51.5 to 46.1, a 10.5% change, and division 263 from 76.8 to 75.4. The unweighted values in the earlier version of this post are superseded by Table 2. The reason is that FIA samples some strata more intensively than others. Equal-weight averages over-represent the more intensively sampled strata, and the expansion factors correct for that. Design-based values are the right basis for comparing regions.
 
-![Figure 2. Mean carbon density by ecodivision, mapped. Division boundaries are outlined in dark grey; state boundaries are shown in light grey for reference.](figures/h03_map_mean_carbon.png)
+### 3.3 Spread within ecodivisions
 
-The 95% confidence intervals in Table 2 are plot-level intervals (mean ± 1.96 × SE, computed from the raw plot-to-plot standard deviation and count), not FIA's full post-stratified design-based variance estimator. This is an appropriate basis for comparing density across groupings but does not capture every source of uncertainty FIA's own published population estimates would include — a point developed further in Section 3.4.
+Design-weighted spread is high across ecodivisions. The median wCV is 0.84, with values from 0.52 (division M223) to 2.06 (division 321, Tropical/Subtropical Steppe). Figure 3 shows the wCV for each division in order of increasing plot count.
 
-### 3.4 Within-division variability and its relationship to sample design
+![Figure 3. Design-weighted coefficient of variation (sd / mean) of carbon density by ecodivision, ordered left to right by ascending number of forested plots.](figures/h05_variance_by_division.png)
 
-In addition to testing whether division means differ, the precision of each division's estimate was examined directly. Division-level coefficients of variation (CV = SD/mean) average approximately 0.7–0.9 (Figure 3), which is high relative to typical reporting expectations for a national forest inventory.
+Does more sampling reduce the spread? Partly. There is a modest negative correlation between wCV and log plot count (Pearson r = −0.38, p = 0.024; Spearman ρ = −0.43, p = 0.010), shown in Figure 4. The relationship is loose: division 321 has by far the highest CV despite a middling plot count (774), well above the fitted trend.
 
-![Figure 3. Coefficient of variation (sd/mean) of carbon density, one point per ecodivision, ordered left to right by ascending number of forested plots.](figures/h05_variance_by_division.png)
+![Figure 4. Design-weighted coefficient of variation plotted against the number of forested plots (log scale), with a least-squares trend line (CV regressed on log n). The Pearson correlation is annotated. Each point is one ecodivision.](figures/h06_cv_vs_nplots.png)
 
-Two explanations were evaluated. First, whether CV is primarily driven by sample size: a modest negative correlation exists between CV and log(n) (Pearson r = -0.40, p = 0.017; Figure 4), but the relationship is loose — division 321 (n = 774, a mid-range sample) exhibits the highest CV in the dataset (2.10), well above the value predicted by the fitted trend.
+### 3.4 Ecodivisions versus states
 
-![Figure 4. Coefficients of variation plotted against the number of forested plots (log scale), with a least-squares trend line (CV regressed on log(n)) and the Pearson correlation annotated. Each point is one ecodivision, labeled by its division code.](figures/h06_cv_vs_nplots.png)
+The spread question has a sharper test. The same forested plots can be grouped by ecodivision (35 groups) or by state (48 states with at least 100 forested plots). A spread that is high only because ecodivisions are an awkward grouping should be lower when the plots are grouped by state, the level FIA was designed to estimate. It is. The median design-weighted CV is 0.84 for ecodivisions and 0.70 for states (Mann–Whitney p = 0.013; Figure 5). With unweighted values the medians are 0.84 and 0.69 (p = 0.015), so design weighting does not change the conclusion.
 
-Second, whether CV is elevated specifically as an artifact of aggregating at the ecodivision level. FIA's plot grid and stratification are designed to support **state- and national-level** estimation; ecodivisions are climate and physiographic boundaries that cut across state and stratum lines and were not a target of the original sample allocation. Regrouping the identical 125,123 forested plots by state instead of by ecodivision provides a direct test of this hypothesis (Figure 5).
+![Figure 5. Design-weighted coefficient of variation of carbon density, computed two ways from the same forested-plot pool: by ecodivision (35 groups) and by state (48 groups with at least 100 forested plots). Boxes show the interquartile range and median; points are individual groups, jittered for visibility.](figures/h07_cv_division_vs_state.png)
 
-![Figure 5. Coefficient of variation of carbon density, computed two ways from the same forested-plot pool: grouped by ecodivision (35 groups) versus grouped by state (48 states with ≥ 100 forested plots). Box shows the interquartile range and median; points are individual divisions/states, jittered for visibility.](figures/h07_cv_division_vs_state.png)
+The difference is not explained by sample size. Median plot counts are similar (2,060 per division and 2,702 per state). The most consistent reading is the one suggested by the design. FIA's plot grid and strata are built to produce estimates for states and the nation. Ecodivisions are climate and physiographic regions that cut across state and stratum lines, so each ecodivision mixes plots from several sampling strata and collects more plot-to-plot variation. A narrower CV at the state level therefore reflects how the sample was designed, not necessarily less variability in the forest.
 
-Median CV is 0.84 at the ecodivision level versus 0.69 at the state level, a statistically significant difference (Mann-Whitney U, p = 0.015). This difference is not attributable to sample size: median plot count per group is comparable between the two groupings (2,060 plots/division vs. 2,702 plots/state). These results are consistent with the sampling-design explanation: state-level aggregation groups plots according to the structure the inventory was designed to support, whereas ecodivision-level aggregation groups them by an independent criterion (climate and vegetation zone) that concentrates, rather than averages out, plot-to-plot heterogeneity within each group. This finding indicates that ecoregion-level carbon density estimates carry structurally higher uncertainty than a state-level estimate of comparable sample size, independent of whether the underlying forest characteristics in any particular division are accurately represented.
+### 3.5 National aggregation and comparison with published totals
+
+Summing the design-based estimates reproduces the national total exactly, as Table 3 shows. The 58 state units, the 35 ecodivisions plus the non-division domain, and an independent aboveground-plus-belowground recomputation all agree to within rounding. The national total is 20,446 million tons of carbon (standard error 44 million tons, 0.2% of the total). Across 706.7 million forested acres, the national mean is 28.9 tons per acre (95% CI 28.8–29.1). The conterminous United States alone accounts for 19,822 million tons over 689.7 million acres, or 28.7 tons per acre.
+
+**Table 3.** Aggregation checks and national totals (live-tree carbon, million short tons C unless noted).
+
+| Check | Value | Result |
+|---|---|---|
+| Sum of 58 state units | 20,445.8 | Reference total |
+| Sum of 35 ecodivisions + non-division domain | 20,445.8 | Matches to rounding (difference 4 × 10⁻⁶) |
+| Independent aboveground + belowground recomputation | 20,445.8 | Matches |
+| Ecodivisions only (excluding non-division domain) | 19,752.3 | 96.6% of total |
+| Non-division domain (Alaska, Hawaii, Pacific islands, plots in water polygons) | 693.5 | Included in national total |
+| National total standard error | 43.8 | 0.2% of total |
+| National mean (tons C per forested acre) | 28.9 (95% CI 28.8–29.1) | Forested area 706.7 million acres |
+| Conterminous US (48 units) | 19,822.4 | 689.7 million forested acres; 28.7 tons per acre |
+| Aboveground live-tree carbon, all units | 17,133.8 short tons = 15,543.5 million metric t | Published reference 14,312 million metric t; difference +8.6% |
+| Belowground live-tree carbon, all units | 3,312.0 | 16.2% of aboveground-plus-belowground total |
+
+The aboveground comparison is not like-for-like. The published reference is an undated U.S. Forest Service figure (U.S. Forest Service, undated) that predates or differs in method and evaluation years from the current NSVB estimates, and no year-matched official EVALIDator carbon total for this set of evaluations was retrievable. The 8.6% difference should therefore be read as a discrepancy to investigate, not as an error in either figure.
+
+### 3.6 Connection to tree-height measurement method
+
+The ecodivisions with the highest carbon density are not randomly distributed with respect to the height issues in Parts 1 and 2. To check this, each division's carbon was split by the height method of the trees carrying it: field-measured (HTCD 1), crew-estimated (HTCD 2/3, Part 1), or FIA-modeled (HTCD 4, Part 2). Shares use the same design weights.
+
+![Figure 6. Share of each of the twelve highest design-weighted carbon-density divisions' carbon by height-measurement method: field-measured (HTCD 1), crew-estimated (HTCD 2/3), or FIA-modeled (HTCD 4). Divisions are in rank order from Table 2.](figures/h04_connector_htcd_share.png)
+
+The pattern is clear. In division 263, the highest-density division at 75.4 tons per acre, 47.3% of carbon comes from field-measured trees, 8.2% from crew estimates, and 44.5% from FIA's model. Division 261 (Mediterranean) is 41.7%, 11.5%, and 46.8%. Division M242 (Marine, 9,371 plots) is 60.9%, 8.3%, and 30.9%, and Division 242 (Marine) is 58.3%, 6.4%, and 35.3%. Part 2 reported that California, Oregon, and Washington hold 99.3% of the nation's HTCD 4 trees; the carbon shares above show how much of that modeled height reaches carbon totals in the highest-density divisions.
+
+By contrast, the Appalachian and eastern Hot and Warm Continental divisions in the top twelve are almost entirely field-measured or crew-estimated. Division 221 is 92.5% field-measured, 7.4% crew-estimated, and 0.07% modeled. Division M211 is 84.1%, 16.0%, and 0.00%, and division 211 is 85.7%, 14.3%, and 0.00%.
 
 ## 4. Discussion
 
-### 4.1 Connection to tree-height measurement method
+### 4.1 Ecodivision spread and FIA's sampling design
 
-The ecodivisions with the highest carbon density in this analysis are not randomly distributed with respect to the tree-height measurement issues examined in Parts 1 and 2 of this series. To characterize this relationship, the carbon total for each of the twelve highest-density divisions was decomposed by the height-measurement method of the contributing trees: field-measured (HTCD 1), crew-estimated (HTCD 2–3, Part 1), or FIA-modeled (HTCD 4, Part 2).
+The regional differences in mean carbon density are real. Four tests on two scales agree, and the design-based means preserve the 29-fold range. The spread within divisions is a different matter. The spread is higher at the ecodivision scale than at the state scale for the same forested plots (Section 3.4), which suggests that the uncertainty of an ecodivision estimate is set partly by how the sample was designed. FIA's plot grid is built for state and national estimates, and an ecodivision is a regrouping of that sample that the design did not target.
 
-![Figure 6. The twelve highest-carbon divisions from Table 2, in the same rank order, decomposed by the height-measurement method behind their carbon: field-measured (HTCD 1), crew-estimated (HTCD 2/3), or FIA-modeled (HTCD 4).](figures/h04_connector_htcd_share.png)
+### 4.2 Height-measurement method
 
-Division 263, the single highest-carbon division in this analysis (76.8 tons/acre), derives 48.6% of its carbon from trees with a field-measured height and 43.2% from FIA's HTCD 4 model. Division M242 (Marine, the largest division by sample size at n = 9,371, and the region shown in Part 2 to contain 99.3% of the nation's HTCD 4 trees) derives 23% of its carbon from modeled heights. By contrast, the Appalachian and eastern "Hot/Warm Continental" divisions that complete the top twelve by carbon density (221, M211, 211) derive 84.2–92.2% of their carbon from field-measured trees and essentially none (0.00–0.08%) from FIA's model; the non-field-measured remainder in these divisions is a crew visual estimate rather than a model-based imputation.
+The divisions with the most carbon also depend most on modeled heights. Part 2 showed that FIA's modeled heights are close to an independently fitted regional model, and the broader study behind this series found that substituting modeled heights for an independent model changes national volume and biomass totals by well under half a percent. The carbon results here therefore do not indicate that the Pacific coast or Mediterranean carbon totals are wrong. They indicate that the reported confidence intervals (Table 2) reflect only plot-to-plot sampling variation. They contain no allowance for uncertainty in the height inputs, which is largest exactly where the most carbon sits.
 
-This pattern does not indicate that carbon estimates for the Pacific coast and Mediterranean-climate divisions are inaccurate: Part 2 found that FIA's modeled heights agree closely with an independently fitted regional model, and the broader study underlying this series found that substituting modeled heights for an independent model shifts national volume and biomass totals by well under half a percent. Rather, it identifies a second, independent reason — alongside the sampling-design finding in Section 3.4 — that the confidence intervals in Table 2 understate total uncertainty for the highest-carbon divisions specifically: those intervals reflect only plot-to-plot sampling variation and include no allowance for uncertainty in the underlying height estimates. The divisions carrying the most carbon are disproportionately both (a) the divisions with the least favorable sampling-design properties for ecoregion-level aggregation, and (b) the divisions most dependent on modeled rather than measured height inputs.
+### 4.3 Implications
 
-### 4.2 Implications
-
-For applications that condition decisions on regional carbon density estimates — land management, carbon-offset markets, or comparative benchmarking — these results suggest that uncertainty bands derived solely from plot-level sampling variance will understate the true uncertainty for high-carbon, Pacific-coast and Mediterranean-climate divisions. A more complete uncertainty accounting for these regions would incorporate both the structurally wider sampling uncertainty documented in Section 3.4 and the height-imputation uncertainty documented in Section 4.1.
+For decisions that depend on regional carbon, such as land management, carbon-offset accounting, or benchmarking a stand against its region, the intervals in Table 2 are a lower bound on uncertainty. A fuller interval would add both the design-level spread in Section 3.4 and the height-method uncertainty in Section 4.2. For the Pacific coast and Mediterranean divisions in particular, that addition would be largest.
 
 ## 5. Limitations
 
-1. **Scope.** This analysis is restricted to live-tree carbon (`CARBON_AG` + `CARBON_BG`). Soil organic carbon, standing and downed dead wood, litter, and understory vegetation carbon are excluded, though FIA reports all of these at the condition level.
-2. **Non-contemporaneous evaluation years.** Each state's own most recent EXPCURR evaluation cycle was used; this mixes inventory years across states rather than representing a single fixed national year.
-3. **Confidence interval basis.** The intervals reported in Table 2 are plot-level (mean ± 1.96 × SE), not derived from FIA's full post-stratified design-based variance estimator used elsewhere in this project for population totals. This choice is appropriate for comparing density across groupings but does not represent a complete uncertainty accounting.
-4. **Descriptive, not causal, evidence for the sampling-design explanation.** The ecodivision-versus-state CV comparison (Section 3.4) is a two-sample comparison of group-level CVs, not a formal mixed-effects variance decomposition. It is consistent with, and is the most parsimonious explanation for, the observed difference, but it cannot fully exclude the alternative that ecoregions are intrinsically more heterogeneous than states as a matter of geography, independent of sample design.
-5. **Map generalization.** Division boundaries are drawn from a coarse, generalized EcoMap layer; division labels are placed at each polygon's representative point. Fine-scale within-division variation is not resolved at this scale.
-6. This is an independent analysis and has not undergone formal peer review.
+1. **Scope.** Only live-tree carbon is analyzed. Soil organic carbon, dead wood, litter, and understory carbon are excluded, even though FIA reports them.
+2. **Evaluation years.** Each state uses its own latest evaluation, so national totals mix inventory years.
+3. **Sampling error only.** The standard errors and intervals cover plot sampling. They omit NSVB equation error and height-imputation uncertainty.
+4. **Variance approximation.** Ratio variances use a first-order delta approximation. Strata with fewer than two plots contribute no within-stratum variance, so their variances are slightly understated.
+5. **Unweighted tests.** The omnibus and pairwise tests use plot values rather than expansion-weighted values. They test distribution shape and separation. The design-based estimates in Tables 2 and 3 are the basis for the means and spreads.
+6. **Coordinates and boundaries.** Plot coordinates are approximate for privacy, and division membership depends on the Cleland layer's generalized boundaries. Plots in water polygons (162 forested) were treated as non-division. Fine-scale variation within a division is not resolved.
+7. **Benchmark.** The published aboveground reference (14,312 million metric t) is undated and not like-for-like, as explained in Section 3.5.
+8. **Independence.** The estimator treats the state estimation units as independent when summing variances, the same convention used elsewhere in this project.
+9. This is an independent analysis. It has not undergone formal peer review.
 
 ## 6. Conclusion
 
-Live-tree carbon density differs substantially and statistically significantly across U.S. ecodivisions (28-fold range; partial η² ≈ 0.22 across four convergent omnibus tests), confirming that ecoregion is a meaningful grouping variable for carbon density. However, the precision with which any single ecodivision's carbon density can be stated is lower than it would be for a comparably sized state-level estimate, for two largely independent reasons: FIA's sampling design was not optimized for ecoregion-level aggregation (Section 3.4), and the highest-carbon divisions are disproportionately dependent on modeled rather than measured tree-height inputs (Section 4.1). Both sources of additional uncertainty concentrate in the same set of divisions — the Pacific coast and Mediterranean-climate regions — which are also the divisions holding the most carbon. Quantifying these two sources of uncertainty explicitly, rather than relying on plot-sampling standard errors alone, is a direct and tractable extension of this work.
+Design-based live-tree carbon density differs substantially across ecodivisions, by about 29-fold, and the difference is robust to the statistical tests used. The national totals add up exactly from states or ecodivisions, and the aboveground comparison with a published figure shows a discrepancy of 8.6% that needs a year-matched benchmark to resolve. Two results add uncertainty beyond sampling error. Ecodivision-level spreads are structurally higher than state-level spreads, consistent with FIA's design, and the regions with the most carbon rely most heavily on modeled tree heights. Both point to the same places, the Pacific coast and Mediterranean-climate divisions. Those regions should carry wider uncertainty bands than their plot-level intervals show, and building those bands is a concrete next step.
+
+## Glossary
+
+| Term | Meaning | Learn more |
+|---|---|---|
+| Live-tree carbon | Carbon held in living trees, aboveground (`CARBON_AG`) plus belowground roots (`CARBON_BG`), estimated by FIA's NSVB equations. | [NSVB](https://research.fs.usda.gov/programs/fia/nsvb) |
+| FIADB | The FIA database: plot, tree, and condition records for all sampled forest land in the United States. | [FIA tools and data](https://www.fia.fs.usda.gov/tools-data/) |
+| EVALIDator | FIA's online tool that reproduces official population estimates from FIADB. | [FIA tools and data](https://www.fia.fs.usda.gov/tools-data/) |
+| EXPCURR / evaluation | The current inventory evaluation for a state. Each state's latest one is used here. | [FIA tools and data](https://www.fia.fs.usda.gov/tools-data/) |
+| Plot | One FIA sample location, about 1/6 acre of forest measured within a cluster of subplots. | [FIA plot design](https://www.fia.fs.usda.gov/tools-data/) |
+| Stratum | A group of plots sampled with the same intensity; each stratum has its own expansion factor. | Bechtold and Patterson (2005) |
+| Expansion factor (`EXPNS`) | Acres of land each plot represents in its stratum. | Bechtold and Patterson (2005) |
+| Post-stratification | Estimating from plots after they are grouped by stratum, using the stratum expansion factors. | Scott et al. (2005) |
+| Ecodivision | A Cleland ecological division: a climate and physiographic region of the United States. | Cleland et al. (2007) |
+| HTCD | FIA's height method code. 1 = measured; 2/3 = crew estimate; 4 = FIA model. | [Part 1](https://pratyush-dh.github.io/projects/blog/) and [Part 2](https://pratyush-dh.github.io/projects/blog/htcd4/) |
+| Mean density (tons C per forested acre) | Carbon divided by forested area, the ratio estimate used for each domain. | Section 2.2 |
+| Standard error (SE) | The estimated standard deviation of an estimate across repeated samples. The 95% interval is the estimate ± 1.96 SE. | Any introductory statistics text |
+| Coefficient of variation (CV) | Standard deviation divided by mean. A dimensionless spread measure; 0.8 means the typical deviation is 80% of the average. | [Wikipedia: CV](https://en.wikipedia.org/wiki/Coefficient_of_variation) |
+| Design-weighted CV (wCV) | CV with each plot weighted by its expansion factor, so the spread reflects forested acres. | Section 2.3 |
+| Levene's test | Tests whether groups have equal variances. | Brown and Forsythe (1974) |
+| Welch's ANOVA | One-way ANOVA that allows unequal variances. | Welch (1951) |
+| Kruskal–Wallis test | A rank-based test of whether groups differ, without normality assumptions. | Kruskal and Wallis (1952) |
+| Games–Howell and Dunn–Holm | Pairwise comparison procedures with correction for multiple tests, paired with Welch and Kruskal–Wallis. | Games and Howell (1976); Dunn (1964); Holm (1979) |
+| Partial η² and ε² | Effect size: the share of variance a factor explains, here about one-fifth. | Cohen (1988) |
+| Mann–Whitney U test | A rank-based test that two independent samples differ. | Mann and Whitney (1947) |
+| log1p | log(1 + x): a transformation for right-skewed values that keeps zeros defined. | — |
+| Tukey fences | Outlier limits at 1.5 times the interquartile range beyond the quartiles. | Tukey (1977) |
+| Violin plot | A box plot with a density curve, showing the shape of a distribution. | — |
 
 ## Data and Code Availability
 
-This analysis builds on [Part 1](https://pratyush-dh.github.io/projects/blog/) and [Part 2](https://pratyush-dh.github.io/projects/blog/htcd4/) of this series, which provide background on HTCD and the regional height-diameter model referenced in Section 4.1. Scripts, full result tables (all omnibus and pairwise test statistics, the state-level CV comparison, and the division-by-HTCD carbon decomposition), and print-quality figures are available at [`carbon_ecoregion`](https://github.com/pratyush-dh/projects/tree/main/blog/carbon_ecoregion). All analyses read the public FIADB SQLite export directly; no database server is required to reproduce them.
+This analysis builds on [Part 1](https://pratyush-dh.github.io/projects/blog/) and [Part 2](https://pratyush-dh.github.io/projects/blog/htcd4/) of this series. Scripts, the design-based estimates by state and ecodivision, the aggregation checks, the HTCD carbon shares, and the figures are in [`carbon_ecoregion`](https://github.com/pratyush-dh/projects/tree/main/blog/carbon_ecoregion). All analyses read the public [FIADB](https://www.fia.fs.usda.gov/tools-data/) SQLite export directly, and no database server is needed.
 
 ## References
 
+Bechtold, W. A., and Patterson, P. L. (eds.) (2005). *The Enhanced Forest Inventory and Analysis Program: National Sampling Design and Estimation Procedures.* USDA Forest Service General Technical Report SRS-80.
+
+Brown, M. B., and Forsythe, A. B. (1974). Robust tests for the equality of variances. *Journal of the American Statistical Association*, 69(346), 364–367.
+
+Cleland, D. T., Freeouf, J. A., Keys, J. E., Nowacki, G. J., Carpenter, C., and McNab, W. H. (2007). *Ecological Subregions: Sections and Subsections for the Conterminous United States.* USDA Forest Service General Technical Report WO-76D.
+
 Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.). Lawrence Erlbaum Associates.
+
+Dunn, O. J. (1964). Multiple comparisons using rank sums. *Technometrics*, 6(3), 241–252.
+
+Games, P. A., and Howell, J. F. (1976). Pairwise multiple comparison procedures with unequal n's and/or variances. *Psychological Bulletin*, 83(1), 157–160.
+
+Holm, S. (1979). A simple sequentially rejective multiple test procedure. *Scandinavian Journal of Statistics*, 6(2), 65–70.
+
+Kruskal, W. H., and Wallis, W. A. (1952). Use of ranks in one-criterion variance analysis. *Journal of the American Statistical Association*, 47(260), 583–621.
+
+Mann, H. B., and Whitney, D. R. (1947). On a test of whether one of two random variables is stochastically larger than the other. *Annals of Mathematical Statistics*, 18(1), 50–60.
+
+Scott, C. T., Bechtold, W. A., Reams, G. A., Smith, W. D., Westfall, J. A., Hansen, M. H., and Moisen, G. G. (2005). Sample-based estimators used by the Forest Inventory and Analysis national information management system. In: Bechtold and Patterson (2005).
+
+Tukey, J. W. (1977). *Exploratory Data Analysis.* Addison-Wesley.
+
+U.S. Forest Service. Undated national aboveground live-tree carbon estimate, located through a web search; the publication year and carbon method could not be confirmed (cited in Section 3.5).
+
+Welch, B. L. (1951). On the comparison of several mean values: an alternative approach. *Biometrika*, 38(3–4), 330–336.
+
+Westfall, J. A., et al. (2024). *Tree volume, biomass, and carbon models* (NSVB). USDA Forest Service General Technical Report WO-104.
 
 This is an independent analysis and not an official FIA product. Corrections and questions are welcome via [GitHub issue](https://github.com/pratyush-dh/projects/issues).

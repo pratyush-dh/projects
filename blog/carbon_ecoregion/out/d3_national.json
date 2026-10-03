@@ -1,0 +1,21 @@
+{
+ "conus_states": 48,
+ "conus_total_MMT_C": 19822.44917021135,
+ "conus_forest_acres_M": 689.7342176436649,
+ "conus_mean_tC_per_forest_acre": 28.739257330063555,
+ "n_states": 58,
+ "n_plots_all": 334046,
+ "n_forest_all": 128789,
+ "national_total_MMT_C_all_states": 20445.780231969864,
+ "national_total_MMT_C_sum_divisions_plus_NA": 20445.78023196986,
+ "national_total_MMT_C_sum_divisions_only": 19752.29039832173,
+ "national_total_MMT_C_NA_domain": 693.4898336481333,
+ "national_forest_acres_M": 706.712291118462,
+ "national_mean_tC_per_forest_acre": 28.93084001639735,
+ "national_mean_se": 0.061320825287855776,
+ "national_mean_ci_lo": 28.810651198833153,
+ "national_mean_ci_hi": 29.05102883396155,
+ "national_total_se_MMT": 43.78046991125978,
+ "divisions_only_total_se_MMT": 42.54775297698092,
+ "state_sum_check_diff": 3.814697265625e-06
+}
