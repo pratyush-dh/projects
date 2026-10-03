@@ -24,27 +24,58 @@ Plots were assigned to one of 35 Cleland ecodivisions (Cleland et al., 2007) by 
 
 ### 2.2 Design-based estimation
 
-FIA samples the country with a systematic grid of plots, and the plots are grouped into **strata** (groups with the same sampling intensity). Each stratum carries an **expansion factor** (`EXPNS`), the number of acres each plot in that stratum represents. Summing these expansions over the plots gives estimates for the whole country, which is the purpose of FIA's **post-stratified** estimation design (Bechtold and Patterson, 2005; Scott et al., 2005). The point estimates and variances here follow the same convention the project already uses for national and state totals.
+FIA samples the country with a systematic grid of plots. The plots are grouped into **strata** (groups sampled with the same intensity), and each stratum carries an **expansion factor** that says how many acres each of its plots represents. Summing expanded plot values gives estimates for whole states and the nation. This is FIA's **post-stratified** design (Bechtold and Patterson, 2005; Scott et al., 2005), and the estimators below follow the convention the project already uses for national and state totals.
 
-For a set of plots with per-acre values \(y_j\) (tons C per acre of plot), in stratum \(h\) with \(n_h\) plots, the total is
+The notation is defined in Table A. Plots are indexed by \(j\) and strata by \(h\).
+
+**Table A.** Notation used in the estimates.
+
+| Symbol | Meaning |
+|---|---|
+| \(j\), \(h\) | Plot index and stratum index |
+| \(n_h\), \(n\) | Number of plots in stratum \(h\); total plots, \(n = \sum_h n_h\) |
+| \(\mathrm{EXPNS}_h\) | Expansion factor: acres each plot in stratum \(h\) represents |
+| \(A\) | Total acres represented by the sample, \(A = \sum_h \mathrm{EXPNS}_h\, n_h\) |
+| \(W_h\) | Share of total area in stratum \(h\), \(W_h = \mathrm{EXPNS}_h\, n_h / A\) |
+| \(y_j\) | Live-tree carbon on plot \(j\), in tons C per acre of plot |
+| \(x_j\) | Forest indicator: 1 if plot \(j\) is forested (carbon greater than 0), otherwise 0 |
+| \(s_h^2\) | Variance of plot values \(y_j\) within stratum \(h\) |
+| \(\hat{Y}\), \(\hat{X}\) | Estimated total carbon (tons C) and estimated forested acres |
+| \(R\) | Mean carbon per forested acre, \(R = \hat{Y} / \hat{X}\) |
+| \(\bar{y}_w\), \(s_w\) | Design-weighted mean and standard deviation of plot values |
+| wCV | Design-weighted coefficient of variation, \(s_w / \bar{y}_w\) |
+
+The estimated total carbon is
 
 \[
-\hat{Y} = \sum_h \mathrm{EXPNS}_h \sum_{j \in h} y_j
+\hat{Y} = \sum_{h} \mathrm{EXPNS}_h \sum_{j \in h} y_j ,
 \]
 
 and its variance is
 
 \[
-V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_h W_h s_h^2 + \frac{1}{n^2} \sum_h (1 - W_h)\, s_h^2 \right],
+V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 \right].
 \]
 
-where \(A = \sum_h \mathrm{EXPNS}_h n_h\) is the total area, \(W_h = \mathrm{EXPNS}_h n_h / A\), \(n = \sum_h n_h\), and \(s_h^2\) is the plot-to-plot variance within stratum \(h\).
+The same estimator applied to the forest indicator gives \(\hat{X}\), the forested acres. The mean carbon per forested acre is the ratio \(R = \hat{Y}/\hat{X}\). Its variance comes from a first-order (delta-method) approximation:
 
-The quantity reported for each ecodivision or state is the **mean carbon density per forested acre**, the ratio of carbon total to forested area, where the forested-area total uses the same estimator with a forest indicator in place of carbon. Its variance comes from a standard delta-method (first-order Taylor) approximation to that ratio. A 95% confidence interval is the estimate ±1.96 standard errors. Ecodivision domains are handled with domain indicators, so each division's estimate uses the full sampling design rather than just its own plots.
+\[
+V(R) \approx \frac{V(\hat{Y}) + R^2\, V(\hat{X}) - 2R\, \mathrm{Cov}(\hat{Y}, \hat{X})}{\hat{X}^2}.
+\]
+
+A 95% confidence interval is \(R \pm 1.96\sqrt{V(R)}\). Ecodivision estimates use domain indicators: a division's \(\hat{Y}\) and \(\hat{X}\) include only its plots, but the stratum sizes \(n_h\) and expansion factors are those of the full design.
 
 ### 2.3 Spread (coefficient of variation)
 
-The spread of plot values within a domain is measured by the coefficient of variation, CV = standard deviation ÷ mean. The **design-weighted CV (wCV)** computes the mean and standard deviation with each plot weighted by its `EXPNS`, so that plots representing more acres count more. This is the spread a user would see across the forested acres of a domain, rather than across plots treated equally.
+The spread of plot values is measured by the coefficient of variation, \(\mathrm{CV} = s / \bar{y}\), the standard deviation divided by the mean. The **design-weighted CV (wCV)** weights each forested plot by its expansion factor, so that plots representing more acres count more:
+
+\[
+\bar{y}_w = \frac{\sum_j \mathrm{EXPNS}_j\, y_j}{\sum_j \mathrm{EXPNS}_j}, \qquad
+s_w = \sqrt{\frac{\sum_j \mathrm{EXPNS}_j\, (y_j - \bar{y}_w)^2}{\sum_j \mathrm{EXPNS}_j}}, \qquad
+\mathrm{wCV} = \frac{s_w}{\bar{y}_w},
+\]
+
+where the sums run over forested plots (\(x_j = 1\)) in the domain. This is the spread across the forested acres of a domain, not across plots treated equally.
 
 ### 2.4 Statistical tests
 
