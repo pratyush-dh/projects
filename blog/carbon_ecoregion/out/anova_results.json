@@ -1,0 +1,53 @@
+{
+ "min_n": 100,
+ "n_divisions_total": 36,
+ "n_divisions_tested": 35,
+ "n_forested_plots": 125123,
+ "n_forested_plots_tested": 125102,
+ "grand_mean_tons_acre": 30.81255853032707,
+ "grand_median_tons_acre": 24.2665981014046,
+ "max_weighted_vs_unweighted_pct_gap": 10.48649836309754,
+ "levene_brown_forsythe": {
+  "stat": 851.5931995471868,
+  "p": 0.0
+ },
+ "welch_anova": {
+  "Source": "division",
+  "ddof1": 34,
+  "ddof2": 9916.714155,
+  "F": 2074.802956,
+  "p_unc": 0.0,
+  "np2": 0.219401
+ },
+ "welch_anova_log1p": {
+  "Source": "division",
+  "ddof1": 34,
+  "ddof2": 9754.602439,
+  "F": 1394.531384,
+  "p_unc": 0.0,
+  "np2": 0.242044
+ },
+ "kruskal_wallis": {
+  "H": 29479.02514730181,
+  "df": 34,
+  "p": 0.0,
+  "epsilon_sq": 0.23543400854983176
+ },
+ "classic_anova": {
+  "F": 1033.8896651818761,
+  "df_between": 34,
+  "df_within": 125067,
+  "p": 0.0,
+  "eta_sq": 0.2194009079420502
+ },
+ "normality": {
+  "divisions_failing_shapiro_p01": 35,
+  "of": 35,
+  "median_skew": 1.381693544076974
+ },
+ "pairwise": {
+  "n_pairs": 595,
+  "n_sig_gameshowell_p05": 540,
+  "n_sig_dunn_holm_p05": 530
+ }
+}
