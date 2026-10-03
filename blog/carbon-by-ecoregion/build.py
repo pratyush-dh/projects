@@ -13,8 +13,9 @@ seo_title = "Carbon Density by Ecoregion: How Much, How Sure | Pratyush Dhungana
 
 MATH = []
 def _keep_math(mo):
-    MATH.append(mo.group(0))
+    MATH.append(WS.sub(' ', mo.group(0)))
     return f"@@MATH{len(MATH) - 1}@@"
+WS = re.compile(chr(10) + '|' + chr(13))
 body_md = re.compile(re.escape(chr(92) + '[') + r'.*?' + re.escape(chr(92) + ']'), re.S).sub(_keep_math, body_md)
 body_md = re.compile(re.escape(chr(92) + '(') + r'.*?' + re.escape(chr(92) + ')'), re.S).sub(_keep_math, body_md)
 

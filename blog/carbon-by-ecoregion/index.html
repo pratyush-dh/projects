@@ -125,25 +125,15 @@ footer.site-foot a{color:#2a78d6}
 </tbody>
 </table></div>
 <p>The estimated total carbon is</p>
-<p>\[
-\hat{Y} = \sum_{h} \mathrm{EXPNS}_h \sum_{j \in h} y_j ,
-\]</p>
+<p>\[ \hat{Y} = \sum_{h} \mathrm{EXPNS}_h \sum_{j \in h} y_j , \]</p>
 <p>and its variance is</p>
-<p>\[
-V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 \right].
-\]</p>
+<p>\[ V(\hat{Y}) = A^2 [ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 ]. \]</p>
 <p>The same estimator applied to the forest indicator gives \(\hat{X}\), the forested acres. The mean carbon per forested acre is the ratio \(R = \hat{Y}/\hat{X}\). Its variance comes from a first-order (delta-method) approximation:</p>
-<p>\[
-V(R) \approx \frac{V(\hat{Y}) + R^2\, V(\hat{X}) - 2R\, \mathrm{Cov}(\hat{Y}, \hat{X})}{\hat{X}^2}.
-\]</p>
+<p>\[ V(R) \approx \frac{V(\hat{Y}) + R^2\, V(\hat{X}) - 2R\, \mathrm{Cov}(\hat{Y}, \hat{X})}{\hat{X}^2}. \]</p>
 <p>A 95% confidence interval is \(R \pm 1.96\sqrt{V(R)}\). Ecodivision estimates use domain indicators: a division's \(\hat{Y}\) and \(\hat{X}\) include only its plots, but the stratum sizes \(n_h\) and expansion factors are those of the full design.</p>
 <h3>2.3 Spread (coefficient of variation)</h3>
 <p>The spread of plot values is measured by the coefficient of variation, \(\mathrm{CV} = s / \bar{y}\), the standard deviation divided by the mean. The <strong>design-weighted CV (wCV)</strong> weights each forested plot by its expansion factor, so that plots representing more acres count more:</p>
-<p>\[
-\bar{y}_w = \frac{\sum_j \mathrm{EXPNS}_j\, y_j}{\sum_j \mathrm{EXPNS}_j}, \qquad
-s_w = \sqrt{\frac{\sum_j \mathrm{EXPNS}_j\, (y_j - \bar{y}_w)^2}{\sum_j \mathrm{EXPNS}_j}}, \qquad
-\mathrm{wCV} = \frac{s_w}{\bar{y}_w},
-\]</p>
+<p>\[ \bar{y}_w = \frac{\sum_j \mathrm{EXPNS}_j\, y_j}{\sum_j \mathrm{EXPNS}_j}, \qquad s_w = \sqrt{\frac{\sum_j \mathrm{EXPNS}_j\, (y_j - \bar{y}_w)^2}{\sum_j \mathrm{EXPNS}_j}}, \qquad \mathrm{wCV} = \frac{s_w}{\bar{y}_w}, \]</p>
 <p>where the sums run over forested plots (\(x_j = 1\)) in the domain. This is the spread across the forested acres of a domain, not across plots treated equally.</p>
 <h3>2.4 Statistical tests</h3>
 <p>Plot-level carbon density is strongly right-skewed and its variance differs markedly across ecodivisions, so classical one-way ANOVA is not suitable. A Levene's test (Brown–Forsythe version, Brown and Forsythe, 1974) checks for unequal variances. Four omnibus tests of mean differences were run in parallel: Welch's ANOVA (Welch, 1951), which does not assume equal variances; the Kruskal–Wallis test (Kruskal and Wallis, 1952), which uses ranks; Fisher's classical ANOVA, reported only for comparison; and Welch's ANOVA on log1p-transformed values, a check on the skew. Pairwise differences were assessed with Games–Howell (Games and Howell, 1976) and Dunn's test with Holm correction (Dunn, 1964; Holm, 1979). The omnibus and pairwise tests use unweighted plot values, since they describe distribution shape and separation, while all means, intervals, and spread values reported in the results use design weights.</p>

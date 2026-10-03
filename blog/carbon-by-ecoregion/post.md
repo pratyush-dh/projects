@@ -54,7 +54,7 @@ The estimated total carbon is
 and its variance is
 
 \[
-V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 \right].
+V(\hat{Y}) = A^2 [ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 ].
 \]
 
 The same estimator applied to the forest indicator gives \(\hat{X}\), the forested acres. The mean carbon per forested acre is the ratio \(R = \hat{Y}/\hat{X}\). Its variance comes from a first-order (delta-method) approximation:
