@@ -11,7 +11,15 @@ m = re.match(r"^# (.+?)\n+\*(.+?)\*\n+(.*)$", src, re.S)
 title_text, subtitle, body_md = m.group(1), m.group(2), m.group(3)
 seo_title = "Carbon Density by Ecoregion: How Much, How Sure | Pratyush Dhungana"
 
+MATH = []
+def _keep_math(mo):
+    MATH.append(mo.group(0))
+    return f"@@MATH{len(MATH) - 1}@@"
+body_md = re.compile(re.escape(chr(92) + '[') + r'.*?' + re.escape(chr(92) + ']'), re.S).sub(_keep_math, body_md)
+body_md = re.compile(re.escape(chr(92) + '(') + r'.*?' + re.escape(chr(92) + ')'), re.S).sub(_keep_math, body_md)
+
 md = markdown.markdown(body_md, extensions=["tables"])
+md = re.sub(r"@@MATH(\d+)@@", lambda mo: MATH[int(mo.group(1))], md)
 
 # Figures: <p><img alt="Figure N. Caption..." src="figures/x.png" /></p> -> <figure><img alt=short loading=lazy><figcaption>caption</figcaption></figure>
 def fig(mo):
@@ -24,6 +32,9 @@ def fig(mo):
 
 md = re.sub(r'<p><img alt="([^"]*)" (src="[^"]+")\s*/></p>', fig, md)
 md = md.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
+
+MATHJAX = r"""<script>window.MathJax={tex:{inlineMath:[['\(','\)']],displayMath:[['\[','\]']]},svg:{fontCache:'global'}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>"""
 
 CSS = """
 :root{color-scheme:light}
@@ -75,6 +86,7 @@ html = f"""<!doctype html>
 <meta name="twitter:image" content="{IMG}">
 <link rel="icon" href="https://pratyush-dh.github.io/assets/img/favicon.png">
 <style>{CSS}</style>
+{MATHJAX}
 </head>
 <body>
 <header class="site-nav">

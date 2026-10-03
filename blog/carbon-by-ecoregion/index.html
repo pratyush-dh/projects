@@ -40,6 +40,8 @@ footer.site-foot{font:14px/1.6 Arial,sans-serif;color:#52514e;border-top:1px sol
 footer.site-foot a{color:#2a78d6}
 @media(max-width:900px){figure{margin:1.6em 0}figcaption{margin:.5em 0 0}}
 </style>
+<script>window.MathJax={tex:{inlineMath:[['\(','\)']],displayMath:[['\[','\]']]},svg:{fontCache:'global'}};</script>
+<script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
 <header class="site-nav">
@@ -61,19 +63,88 @@ footer.site-foot a{color:#2a78d6}
 <p>Carbon density was computed from <code>TREE.CARBON_AG</code> and <code>TREE.CARBON_BG</code>, FIA's aboveground and belowground carbon estimates for live trees, summed per plot and converted to tons per acre. The analysis is restricted to <strong>live-tree carbon only</strong>. Soil organic carbon, standing and downed dead wood, litter, and understory vegetation carbon are reported by FIA at the condition level but are not included. Each state's most recent current-inventory evaluation (EXPCURR) was used. Because states reach their latest evaluation in different years, the national figures combine each state's own latest cycle rather than one fixed year. The public data are the <a href="https://www.fia.fs.usda.gov/tools-data/">FIADB database</a>, and national and state estimates can be reproduced with FIA's <a href="https://www.fia.fs.usda.gov/tools-data/">EVALIDator tool</a>.</p>
 <p>Plots were assigned to one of 35 Cleland ecodivisions (Cleland et al., 2007) by spatial overlap with the ecodivision layer. Of 334,046 plots on the latest evaluations, 313,178 fall inside an ecodivision. Of those, 125,123 are forested (live-tree carbon greater than zero), which is the analytic sample for the ecodivision estimates. Another 3,666 forested plots lie outside any division (Alaska, Hawaii, Pacific island inventories, and plots inside the layer's water polygons); they are included in the national totals but not in the ecodivision tables. One division (code 262, n = 21) falls below a minimum of 100 forested plots and is reported descriptively only.</p>
 <h3>2.2 Design-based estimation</h3>
-<p>FIA samples the country with a systematic grid of plots, and the plots are grouped into <strong>strata</strong> (groups with the same sampling intensity). Each stratum carries an <strong>expansion factor</strong> (<code>EXPNS</code>), the number of acres each plot in that stratum represents. Summing these expansions over the plots gives estimates for the whole country, which is the purpose of FIA's <strong>post-stratified</strong> estimation design (Bechtold and Patterson, 2005; Scott et al., 2005). The point estimates and variances here follow the same convention the project already uses for national and state totals.</p>
-<p>For a set of plots with per-acre values (y_j) (tons C per acre of plot), in stratum (h) with (n_h) plots, the total is</p>
-<p>[
-\hat{Y} = \sum_h \mathrm{EXPNS}<em>h \sum</em>{j \in h} y_j
-]</p>
+<p>FIA samples the country with a systematic grid of plots. The plots are grouped into <strong>strata</strong> (groups sampled with the same intensity), and each stratum carries an <strong>expansion factor</strong> that says how many acres each of its plots represents. Summing expanded plot values gives estimates for whole states and the nation. This is FIA's <strong>post-stratified</strong> design (Bechtold and Patterson, 2005; Scott et al., 2005), and the estimators below follow the convention the project already uses for national and state totals.</p>
+<p>The notation is defined in Table A. Plots are indexed by \(j\) and strata by \(h\).</p>
+<p><strong>Table A.</strong> Notation used in the estimates.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>\(j\), \(h\)</td>
+<td>Plot index and stratum index</td>
+</tr>
+<tr>
+<td>\(n_h\), \(n\)</td>
+<td>Number of plots in stratum \(h\); total plots, \(n = \sum_h n_h\)</td>
+</tr>
+<tr>
+<td>\(\mathrm{EXPNS}_h\)</td>
+<td>Expansion factor: acres each plot in stratum \(h\) represents</td>
+</tr>
+<tr>
+<td>\(A\)</td>
+<td>Total acres represented by the sample, \(A = \sum_h \mathrm{EXPNS}_h\, n_h\)</td>
+</tr>
+<tr>
+<td>\(W_h\)</td>
+<td>Share of total area in stratum \(h\), \(W_h = \mathrm{EXPNS}_h\, n_h / A\)</td>
+</tr>
+<tr>
+<td>\(y_j\)</td>
+<td>Live-tree carbon on plot \(j\), in tons C per acre of plot</td>
+</tr>
+<tr>
+<td>\(x_j\)</td>
+<td>Forest indicator: 1 if plot \(j\) is forested (carbon greater than 0), otherwise 0</td>
+</tr>
+<tr>
+<td>\(s_h^2\)</td>
+<td>Variance of plot values \(y_j\) within stratum \(h\)</td>
+</tr>
+<tr>
+<td>\(\hat{Y}\), \(\hat{X}\)</td>
+<td>Estimated total carbon (tons C) and estimated forested acres</td>
+</tr>
+<tr>
+<td>\(R\)</td>
+<td>Mean carbon per forested acre, \(R = \hat{Y} / \hat{X}\)</td>
+</tr>
+<tr>
+<td>\(\bar{y}_w\), \(s_w\)</td>
+<td>Design-weighted mean and standard deviation of plot values</td>
+</tr>
+<tr>
+<td>wCV</td>
+<td>Design-weighted coefficient of variation, \(s_w / \bar{y}_w\)</td>
+</tr>
+</tbody>
+</table></div>
+<p>The estimated total carbon is</p>
+<p>\[
+\hat{Y} = \sum_{h} \mathrm{EXPNS}_h \sum_{j \in h} y_j ,
+\]</p>
 <p>and its variance is</p>
-<p>[
-V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_h W_h s_h^2 + \frac{1}{n^2} \sum_h (1 - W_h)\, s_h^2 \right],
-]</p>
-<p>where (A = \sum_h \mathrm{EXPNS}_h n_h) is the total area, (W_h = \mathrm{EXPNS}_h n_h / A), (n = \sum_h n_h), and (s_h^2) is the plot-to-plot variance within stratum (h).</p>
-<p>The quantity reported for each ecodivision or state is the <strong>mean carbon density per forested acre</strong>, the ratio of carbon total to forested area, where the forested-area total uses the same estimator with a forest indicator in place of carbon. Its variance comes from a standard delta-method (first-order Taylor) approximation to that ratio. A 95% confidence interval is the estimate ±1.96 standard errors. Ecodivision domains are handled with domain indicators, so each division's estimate uses the full sampling design rather than just its own plots.</p>
+<p>\[
+V(\hat{Y}) = A^2 \left[ \frac{1}{n} \sum_{h} W_h\, s_h^2 + \frac{1}{n^2} \sum_{h} (1 - W_h)\, s_h^2 \right].
+\]</p>
+<p>The same estimator applied to the forest indicator gives \(\hat{X}\), the forested acres. The mean carbon per forested acre is the ratio \(R = \hat{Y}/\hat{X}\). Its variance comes from a first-order (delta-method) approximation:</p>
+<p>\[
+V(R) \approx \frac{V(\hat{Y}) + R^2\, V(\hat{X}) - 2R\, \mathrm{Cov}(\hat{Y}, \hat{X})}{\hat{X}^2}.
+\]</p>
+<p>A 95% confidence interval is \(R \pm 1.96\sqrt{V(R)}\). Ecodivision estimates use domain indicators: a division's \(\hat{Y}\) and \(\hat{X}\) include only its plots, but the stratum sizes \(n_h\) and expansion factors are those of the full design.</p>
 <h3>2.3 Spread (coefficient of variation)</h3>
-<p>The spread of plot values within a domain is measured by the coefficient of variation, CV = standard deviation ÷ mean. The <strong>design-weighted CV (wCV)</strong> computes the mean and standard deviation with each plot weighted by its <code>EXPNS</code>, so that plots representing more acres count more. This is the spread a user would see across the forested acres of a domain, rather than across plots treated equally.</p>
+<p>The spread of plot values is measured by the coefficient of variation, \(\mathrm{CV} = s / \bar{y}\), the standard deviation divided by the mean. The <strong>design-weighted CV (wCV)</strong> weights each forested plot by its expansion factor, so that plots representing more acres count more:</p>
+<p>\[
+\bar{y}_w = \frac{\sum_j \mathrm{EXPNS}_j\, y_j}{\sum_j \mathrm{EXPNS}_j}, \qquad
+s_w = \sqrt{\frac{\sum_j \mathrm{EXPNS}_j\, (y_j - \bar{y}_w)^2}{\sum_j \mathrm{EXPNS}_j}}, \qquad
+\mathrm{wCV} = \frac{s_w}{\bar{y}_w},
+\]</p>
+<p>where the sums run over forested plots (\(x_j = 1\)) in the domain. This is the spread across the forested acres of a domain, not across plots treated equally.</p>
 <h3>2.4 Statistical tests</h3>
 <p>Plot-level carbon density is strongly right-skewed and its variance differs markedly across ecodivisions, so classical one-way ANOVA is not suitable. A Levene's test (Brown–Forsythe version, Brown and Forsythe, 1974) checks for unequal variances. Four omnibus tests of mean differences were run in parallel: Welch's ANOVA (Welch, 1951), which does not assume equal variances; the Kruskal–Wallis test (Kruskal and Wallis, 1952), which uses ranks; Fisher's classical ANOVA, reported only for comparison; and Welch's ANOVA on log1p-transformed values, a check on the skew. Pairwise differences were assessed with Games–Howell (Games and Howell, 1976) and Dunn's test with Holm correction (Dunn, 1964; Holm, 1979). The omnibus and pairwise tests use unweighted plot values, since they describe distribution shape and separation, while all means, intervals, and spread values reported in the results use design weights.</p>
 <p>To compare spread between levels, the division-level and state-level wCV values were compared with a Mann–Whitney U test (Mann and Whitney, 1947), and the relationship between CV and plot count was described with a Pearson correlation on log(n).</p>
