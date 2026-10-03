@@ -34,7 +34,7 @@ def fig(mo):
 md = re.sub(r'<p><img alt="([^"]*)" (src="[^"]+")\s*/></p>', fig, md)
 md = md.replace("<table>", '<div class="table-wrap"><table>').replace("</table>", "</table></div>")
 
-MATHJAX = r"""<script>window.MathJax={tex:{inlineMath:[['\(','\)']],displayMath:[['\[','\]']]},svg:{fontCache:'global'}};</script>
+MATHJAX = r"""<script>window.MathJax={tex:{inlineMath:[['\\(','\\)']],displayMath:[['\\[','\\]']]},svg:{fontCache:'global'}};</script>
 <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>"""
 
 CSS = """
