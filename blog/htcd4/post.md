@@ -79,7 +79,7 @@ I'd like to hear from people who work with or inside the program. As with the fi
 
 ## Data and code
 
-This post builds directly on [the first post in this series](https://pratyush-dh.github.io/projects/blog/) (HTCD 2, crew-reconstructed heights) — read that one first for the background on HTCD, the regional model, and its own code in `side_htcd2`. Scripts, result tables and the print-quality figures for this post are in [`side_htcd4`](https://github.com/pratyush-dh/projects/tree/main/blog/side_htcd4) alongside the rest of this series' code. Numbers here come from the main study's `targets_current.csv` (no database needed) and a fresh read-only pull from the FIADB SQLite export for the anchor test.
+This post builds directly on [the first post in this series](https://pratyush-dh.github.io/projects/blog/) (HTCD 2, crew-reconstructed heights) — read that one first for the background on HTCD, the regional model, and its own code in `side_htcd2`. Scripts, result tables and the print-quality figures for this post are in [`side_htcd4`](https://github.com/pratyush-dh/projects/tree/main/blog/side_htcd4) alongside the rest of this series' code. Numbers here come from the main study's `targets_current.csv` (no database needed) and a fresh read-only pull from the FIADB SQLite export for the anchor test. The [next post](https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/) in the series picks this thread back up, tracing how FIA-modeled heights connect to regional differences in carbon density.
 
 ## References
 

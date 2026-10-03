@@ -1,0 +1,431 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carbon Density by Ecoregion: How Much, How Sure | Pratyush Dhungana</title>
+<meta name="description" content="Live-tree carbon density varies 28-fold across US ecoregions, a statistically robust difference -- and a look at why the within-region uncertainty is unexpectedly high connects back to this series' earlier posts on FIA tree height data.">
+<link rel="canonical" href="https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How much carbon is in an acre of forest? It depends enormously on where you are">
+<meta property="og:description" content="Live-tree carbon density varies 28-fold across US ecoregions, a statistically robust difference -- and a look at why the within-region uncertainty is unexpectedly high connects back to this series' earlier posts on FIA tree height data.">
+<meta property="og:image" content="https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/figures/h03_map_mean_carbon.png">
+<meta property="og:url" content="https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="How much carbon is in an acre of forest? It depends enormously on where you are">
+<meta name="twitter:description" content="Live-tree carbon density varies 28-fold across US ecoregions, a statistically robust difference -- and a look at why the within-region uncertainty is unexpectedly high connects back to this series' earlier posts on FIA tree height data.">
+<meta name="twitter:image" content="https://pratyush-dh.github.io/projects/blog/carbon-by-ecoregion/figures/h03_map_mean_carbon.png">
+<link rel="icon" href="https://pratyush-dh.github.io/assets/img/favicon.png">
+<style>
+:root{color-scheme:light}
+body{font:17px/1.65 Georgia,'Times New Roman',serif;color:#1c1c1a;max-width:760px;margin:0 auto;padding:0 20px 60px;background:#fff}
+header.site-nav{font:14px Arial,sans-serif;padding:18px 0;border-bottom:1px solid #e6e5e1;margin-bottom:1.2em;display:flex;gap:1.4em;flex-wrap:wrap}
+header.site-nav a{color:#52514e;text-decoration:none}
+header.site-nav a:hover{color:#2a78d6;text-decoration:underline}
+article > h1{font:700 34px/1.2 Arial,sans-serif;margin:0.2em 0 0.1em}
+.subtitle{font-style:italic;color:#52514e;margin:0 0 1.4em}
+h2{font:700 24px/1.3 Arial,sans-serif;margin-top:2em}
+h3{font:700 19px Arial,sans-serif;margin-top:1.6em}
+figure{margin:1.6em -60px}
+figure img{width:100%;height:auto;display:block}
+figcaption{font:14px/1.5 Arial,sans-serif;color:#52514e;margin:.5em 60px 0}
+.table-wrap{overflow-x:auto;margin:1em 0}
+table{border-collapse:collapse;width:100%;font:15px Arial,sans-serif;min-width:480px}
+th,td{border-bottom:1px solid #ddd;padding:6px 8px;text-align:left}
+th{background:#f4f4f2}
+em{color:#3b3b39}
+a{color:#2a78d6}
+code{background:#f4f4f2;padding:0.1em 0.3em;border-radius:3px;font-size:0.9em}
+footer.site-foot{font:14px/1.6 Arial,sans-serif;color:#52514e;border-top:1px solid #e6e5e1;margin-top:3em;padding-top:1.2em}
+footer.site-foot a{color:#2a78d6}
+@media(max-width:900px){figure{margin:1.6em 0}figcaption{margin:.5em 0 0}}
+</style>
+</head>
+<body>
+<header class="site-nav">
+<a href="https://pratyush-dh.github.io/">&larr; Portfolio</a>
+<a href="https://pratyush-dh.github.io/projects/blog/htcd4/">&larr; Previous post (HTCD 4)</a>
+<a href="https://github.com/pratyush-dh/projects/tree/main/blog/carbon_ecoregion">Code &amp; source</a>
+</header>
+<article>
+<h1>How much carbon is in an acre of forest? It depends enormously on where you are</h1>
+<p class="subtitle">Understanding FIA data, part 3: carbon density by ecoregion</p>
+<p>The <a href="https://pratyush-dh.github.io/projects/blog/">first</a> and <a href="https://pratyush-dh.github.io/projects/blog/htcd4/">second</a> posts in this series both asked one narrow question: how trustworthy are the tree heights in FIA's database when they weren't actually measured in the field? This post asks something different with the same database — how much live-tree carbon does an acre of forest actually hold, and does that number really differ from one ecoregion to the next, or could the apparent differences just be noise? Answering that honestly turns out to require two separate investigations: whether regional differences in the <em>average</em> are real, and why the <em>spread</em> within each region is as large as it is. The second investigation leads right back to the first two posts.</p>
+<h2>The short version</h2>
+<ul>
+<li>Live-tree carbon density (tons C/acre) was compared across 35 Cleland ecodivisions, using 125,123 forested FIA plots.</li>
+<li>The regional differences are real: density ranges 28-fold, from about 2.8 tons/acre in the driest Southwestern divisions to about 77 tons/acre on the central California coast, and it survives a battery of four distribution-robust tests plus two post-hoc procedures (details below).</li>
+<li>But the within-division spread is also large — coefficients of variation (CV) typically around 0.7–0.9 — and that turns out to be partly a side effect of the comparison itself: regrouping the same plots by <em>state</em> instead of by ecodivision drops the median CV from 0.84 to 0.69 (p = 0.015). FIA's sample was built to support state and national estimates, not ecoregion-level ones, and ecoregions cut across that design.</li>
+<li>The callback: the divisions with the <em>highest</em> carbon density are disproportionately the same Pacific-coast and Mediterranean-climate divisions that Part 2 showed lean hardest on FIA's own modeled (not field-measured) tree heights. The single highest-carbon division in this analysis gets less than half its carbon from a tree with a field-measured height.</li>
+</ul>
+<h2>Why ecoregion, and why carbon</h2>
+<p>FIA computes live-tree carbon (<code>CARBON_AG</code> + <code>CARBON_BG</code>, aboveground plus belowground) from the same NSVB pipeline this series has been examining all along: species, diameter, height, ecological division, stand origin. The question here is whether that output actually separates cleanly by ecoregion — the kind of thing a land manager, a carbon-offset buyer, or anyone comparing "my forest" to "a typical forest nearby" would want to know — and whether that separation can be defended statistically rather than just eyeballed off a map.</p>
+<p><strong>Scope note up front:</strong> this is <strong>live-tree carbon only</strong>. FIA also reports soil organic carbon, dead wood, litter, and understory vegetation carbon at the condition level, none of which are included here. "Carbon density" below always means the live-tree component.</p>
+<h2>Data and methods</h2>
+<p>Each forested FIA plot gets one number: the sum of every live tree's carbon, weighted by <code>TPA_UNADJ × ADJ_FACTOR</code> (the same per-plot weighting convention this series has used throughout), converted to tons per acre. The <strong>plot</strong>, not the tree, is the unit of analysis, so correlation between trees on the same plot can't quietly inflate the sample size the way it would if every one of the underlying 3.5 million trees were treated as independent. 313,178 plots have an assigned ecodivision (Alaska, Hawaii, and the territories are excluded, as throughout this series, since Cleland's layer doesn't cover them); 125,123 of those are forested, and divisions with fewer than 100 forested plots (one division, n = 21) are reported but excluded from the significance tests.</p>
+<p>FIA's base plot grid is an equal-probability systematic sample, so a plain average across a division's plots is a valid estimate of that division's mean density without needing the stratum expansion factors (<code>EXPNS</code>) — those exist to scale a sample up to a population <em>total</em>, which isn't the question here. As a check, each division's <code>EXPNS</code>-weighted mean was also computed; it agrees with the unweighted mean within 10.5 percentage points everywhere, usually much closer.</p>
+<h2>The data don't fit a textbook ANOVA</h2>
+<p>Carbon density per plot is heavily right-skewed (most stands are young, with a long tail of older, denser stands) and the spread differs enormously by region — standard deviation ranges from about 3.6 to 63 tons/acre across divisions. A Levene's test confirms the obvious: variances are not equal (p &lt; 10⁻³⁰⁰). So instead of running one ANOVA and calling it done, a small battery of tests was run and checked for agreement:</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Test</th>
+<th>What it assumes</th>
+<th>Result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Levene's (Brown–Forsythe)</td>
+<td>— (tests equal variance itself)</td>
+<td>Rejected: variances differ sharply by division</td>
+</tr>
+<tr>
+<td><strong>Welch's ANOVA</strong> (primary)</td>
+<td>Unequal variances allowed</td>
+<td>F(34, 9917) = 2075, p &lt; 10⁻³⁰⁰, partial η² = 0.219</td>
+</tr>
+<tr>
+<td>Kruskal–Wallis (rank-based)</td>
+<td>No distributional shape assumed</td>
+<td>H(34) = 29,479, p &lt; 10⁻³⁰⁰, ε² = 0.235</td>
+</tr>
+<tr>
+<td>Classic (Fisher) ANOVA</td>
+<td>Equal variances (violated above)</td>
+<td>F(34, 125067) = 1034, p &lt; 10⁻³⁰⁰, η² = 0.219 — for comparison only</td>
+</tr>
+<tr>
+<td>Welch's ANOVA, log1p scale</td>
+<td>Robust to the raw skew</td>
+<td>F = 1395, p &lt; 10⁻³⁰⁰, partial η² = 0.242</td>
+</tr>
+</tbody>
+</table></div>
+<p>All four agree: ecodivision alone accounts for roughly a fifth of all plot-to-plot variation in carbon density — a large effect by conventional standards — and the conclusion doesn't change whether the raw scale, the log scale, or a test with no normality assumption at all is used.</p>
+<figure>
+<img src="figures/h01_boxplot_by_division.png" alt="Figure 1" loading="lazy" decoding="async"/>
+<figcaption>Figure 1. Carbon density by ecodivision, ranked by sample size (n, labeled above each violin): violin width shows the distribution, the white line the median. Points beyond the Tukey fences (1.5×IQR) are trimmed for readability.</figcaption>
+</figure>
+<p>For <em>which specific</em> regions differ from which, two post-hoc procedures were run: Games-Howell (pairs naturally with Welch's ANOVA, safe under unequal variance and unequal sample sizes) and Dunn's test with Holm correction (pairs with Kruskal-Wallis, rank-based, no distributional assumption at all). Across all 595 regional pairs, they agree closely — 90.8% and 89.1% significant respectively at p &lt; 0.05 after correction — and the handful of non-significant pairs are almost all genuinely close neighbors in the ranking, or involve the division with the smallest tested sample (n = 172).</p>
+<h2>Why is the within-division spread so high?</h2>
+<p>A coefficient of variation around 0.7–0.9 is high for output from a national forest inventory that's often described as statistically robust, and that's worth pausing on before trusting any single division's number too precisely.</p>
+<figure>
+<img src="figures/h05_variance_by_division.png" alt="Figure 2" loading="lazy" decoding="async"/>
+<figcaption>Figure 2. Coefficient of variation (sd/mean) of carbon density, one point per ecodivision, ordered left to right by ascending number of forested plots.</figcaption>
+</figure>
+<p>The first thing to check is whether this is simply a small-sample problem — do divisions with fewer plots just have noisier CV estimates? There's a real, if modest, tendency in that direction (Pearson r = -0.40 between CV and log(n), p = 0.017), but it's a loose relationship, not a tight one: division 321, with a middling plot count (774), has by far the highest CV in the dataset (2.10), well above what the trend line would predict.</p>
+<figure>
+<img src="figures/h06_cv_vs_nplots.png" alt="Figure 3" loading="lazy" decoding="async"/>
+<figcaption>Figure 3. The same coefficients of variation plotted directly against the number of forested plots (log scale), with a least-squares trend line (CV regressed on log(n)) and the Pearson correlation annotated. Each point is one ecodivision, labeled by its division code.</figcaption>
+</figure>
+<p>A more fundamental explanation is the sampling design itself. FIA's plot grid is designed and allocated to support <strong>national and state-level</strong> estimates — that's the geography its sampling intensity, stratification, and variance formulas are built around. Ecodivisions are a different geography: climate and physiography boundaries that cut across state and stratum lines, grouping plots by a criterion the sample design never optimized for. Regrouping the identical 125,123 forested plots by state instead of by ecodivision tests that directly:</p>
+<figure>
+<img src="figures/h07_cv_division_vs_state.png" alt="Figure 4" loading="lazy" decoding="async"/>
+<figcaption>Figure 4. Coefficient of variation of carbon density, computed two ways from the same forested-plot pool: once grouped by ecodivision (35 groups) and once grouped by state (48 states with at least 100 forested plots). Box shows the IQR and median; points are individual divisions/states, jittered for visibility.</figcaption>
+</figure>
+<p>Median CV is 0.84 at the ecodivision level versus 0.69 at the state level — a statistically significant difference (Mann-Whitney U, p = 0.015) — and it isn't a sample-size artifact: the two groupings have comparable plot counts per group (median 2,060 plots/division vs. 2,702 plots/state), so the gap can't be explained by ecodivisions simply having smaller samples. The most defensible reading is the one the sampling design itself suggests: state-level aggregation groups plots the way the inventory was built to support, while ecodivision-level aggregation groups them by climate and vegetation zone — a real and meaningful grouping, but one that concentrates more of the underlying plot-to-plot heterogeneity inside each group rather than averaging it away. <strong>The takeaway isn't that ecoregion-level carbon estimates are wrong — it's that their uncertainty is structurally higher than a state-level number with a similar sample size, for reasons baked into the sample design rather than into any particular division's forest.</strong></p>
+<h2>The result: carbon density by ecoregion</h2>
+<p>With that caveat in hand, mean carbon density ranges from about 2.8 tons/acre in the driest Tropical/Subtropical Steppe division to about 77 tons/acre on the central California coast — a 28-fold spread. The ranked pattern matches what you'd expect from forest-carbon geography: Pacific coast conifer forest and the Appalachians/Northeast carry the most carbon per acre; the semi-arid Southwest and southern Plains carry the least.</p>
+<p><strong>Table 1. Ranked mean carbon density by ecodivision, with 95% confidence intervals</strong>, highest to lowest. The 35 divisions above the line were included in the significance tests; one division (262) fell below the 100-plot threshold and is shown separately below the line.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+<th>Division</th>
+<th>Name</th>
+<th>n plots</th>
+<th>Mean (tons C/acre)</th>
+<th>95% CI</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>263</td>
+<td>Mediterranean</td>
+<td>434</td>
+<td>76.8</td>
+<td>70.9–82.8</td>
+</tr>
+<tr>
+<td>M242</td>
+<td>Marine</td>
+<td>9,371</td>
+<td>64.2</td>
+<td>63.1–65.4</td>
+</tr>
+<tr>
+<td>242</td>
+<td>Marine</td>
+<td>566</td>
+<td>51.5</td>
+<td>48.0–55.1</td>
+</tr>
+<tr>
+<td>M221</td>
+<td>Hot Continental</td>
+<td>5,882</td>
+<td>45.9</td>
+<td>45.3–46.6</td>
+</tr>
+<tr>
+<td>M261</td>
+<td>Mediterranean</td>
+<td>5,403</td>
+<td>43.0</td>
+<td>41.8–44.2</td>
+</tr>
+<tr>
+<td>261</td>
+<td>Mediterranean</td>
+<td>172</td>
+<td>40.9</td>
+<td>33.2–48.6</td>
+</tr>
+<tr>
+<td>221</td>
+<td>Hot Continental</td>
+<td>6,101</td>
+<td>37.7</td>
+<td>37.1–38.4</td>
+</tr>
+<tr>
+<td>M211</td>
+<td>Warm Continental</td>
+<td>3,887</td>
+<td>35.3</td>
+<td>34.7–35.8</td>
+</tr>
+<tr>
+<td>211</td>
+<td>Warm Continental</td>
+<td>4,132</td>
+<td>35.0</td>
+<td>34.3–35.6</td>
+</tr>
+<tr>
+<td>231</td>
+<td>Subtropical</td>
+<td>13,583</td>
+<td>33.0</td>
+<td>32.7–33.4</td>
+</tr>
+<tr>
+<td>223</td>
+<td>Hot Continental</td>
+<td>6,441</td>
+<td>32.1</td>
+<td>31.6–32.6</td>
+</tr>
+<tr>
+<td>M333</td>
+<td>Temperate Desert</td>
+<td>3,645</td>
+<td>31.1</td>
+<td>30.3–31.9</td>
+</tr>
+<tr>
+<td>M223</td>
+<td>Hot Continental</td>
+<td>561</td>
+<td>30.4</td>
+<td>29.1–31.8</td>
+</tr>
+<tr>
+<td>234</td>
+<td>Subtropical</td>
+<td>1,473</td>
+<td>29.4</td>
+<td>28.3–30.5</td>
+</tr>
+<tr>
+<td>232</td>
+<td>Subtropical</td>
+<td>14,727</td>
+<td>28.2</td>
+<td>27.8–28.5</td>
+</tr>
+<tr>
+<td>M231</td>
+<td>Subtropical</td>
+<td>979</td>
+<td>27.8</td>
+<td>26.8–28.8</td>
+</tr>
+<tr>
+<td>212</td>
+<td>Warm Continental</td>
+<td>12,445</td>
+<td>26.1</td>
+<td>25.8–26.5</td>
+</tr>
+<tr>
+<td>222</td>
+<td>Hot Continental</td>
+<td>4,780</td>
+<td>25.5</td>
+<td>24.9–26.1</td>
+</tr>
+<tr>
+<td>M332</td>
+<td>Temperate Desert</td>
+<td>6,120</td>
+<td>23.6</td>
+<td>23.1–24.1</td>
+</tr>
+<tr>
+<td>251</td>
+<td>Prairie</td>
+<td>2,252</td>
+<td>22.1</td>
+<td>21.4–22.8</td>
+</tr>
+<tr>
+<td>411</td>
+<td>Savannah</td>
+<td>138</td>
+<td>19.8</td>
+<td>16.7–22.9</td>
+</tr>
+<tr>
+<td>M331</td>
+<td>Temperate Desert</td>
+<td>5,997</td>
+<td>17.5</td>
+<td>17.1–17.9</td>
+</tr>
+<tr>
+<td>255</td>
+<td>Prairie</td>
+<td>1,316</td>
+<td>15.5</td>
+<td>14.8–16.1</td>
+</tr>
+<tr>
+<td>M334</td>
+<td>Temperate Desert</td>
+<td>362</td>
+<td>14.5</td>
+<td>13.4–15.6</td>
+</tr>
+<tr>
+<td>M313</td>
+<td>Tropical/Subtropical Steppe</td>
+<td>2,060</td>
+<td>12.3</td>
+<td>11.7–12.9</td>
+</tr>
+<tr>
+<td>332</td>
+<td>Temperate Steppe</td>
+<td>551</td>
+<td>11.8</td>
+<td>10.7–12.9</td>
+</tr>
+<tr>
+<td>M262</td>
+<td>Mediterranean</td>
+<td>328</td>
+<td>10.2</td>
+<td>8.9–11.5</td>
+</tr>
+<tr>
+<td>331</td>
+<td>Temperate Steppe</td>
+<td>1,339</td>
+<td>9.0</td>
+<td>8.4–9.5</td>
+</tr>
+<tr>
+<td>M341</td>
+<td>Temperate Desert</td>
+<td>2,240</td>
+<td>8.6</td>
+<td>8.3–9.0</td>
+</tr>
+<tr>
+<td>342</td>
+<td>Temperate Desert</td>
+<td>1,111</td>
+<td>8.4</td>
+<td>7.8–9.0</td>
+</tr>
+<tr>
+<td>313</td>
+<td>Tropical/Subtropical Steppe</td>
+<td>3,172</td>
+<td>8.4</td>
+<td>8.0–8.7</td>
+</tr>
+<tr>
+<td>341</td>
+<td>Temperate Desert</td>
+<td>2,060</td>
+<td>7.1</td>
+<td>6.8–7.5</td>
+</tr>
+<tr>
+<td>322</td>
+<td>Tropical/Subtropical Desert</td>
+<td>400</td>
+<td>4.7</td>
+<td>4.2–5.2</td>
+</tr>
+<tr>
+<td>315</td>
+<td>Tropical/Subtropical Steppe</td>
+<td>300</td>
+<td>2.8</td>
+<td>2.4–3.2</td>
+</tr>
+<tr>
+<td>321</td>
+<td>Tropical/Subtropical Steppe</td>
+<td>774</td>
+<td>2.8</td>
+<td>2.4–3.2</td>
+</tr>
+<tr>
+<td><em>262</em></td>
+<td><em>Mediterranean</em></td>
+<td><em>21</em></td>
+<td><em>13.3</em></td>
+<td><em>6.6–20.0 (below the 100-plot test threshold; excluded from significance tests)</em></td>
+</tr>
+</tbody>
+</table></div>
+<figure>
+<img src="figures/h03_map_mean_carbon.png" alt="Figure 5" loading="lazy" decoding="async"/>
+<figcaption>Figure 5. The same pattern, mapped. Division boundaries are outlined in dark grey; state lines are the faint grey underneath, for reference only.</figcaption>
+</figure>
+<p>Worth flagging, given the previous section: the 95% CIs in Table 1 are plot-level confidence intervals (mean ± 1.96 × SE, from the raw plot-to-plot standard deviation and count) — exactly the quantity shown to be structurally wider at the ecodivision level than at the state level. They're a fair description of sampling uncertainty at this grouping, but a state-level or national rollup of the same underlying plots would carry tighter intervals for reasons that have nothing to do with any division's forest being less knowable.</p>
+<h2>Where this series catches up with itself</h2>
+<p>Here's the part that sent me back to the first two posts. The highest-carbon divisions in this analysis aren't a random draw from the map — several of them are exactly the Pacific-coast and Mediterranean-climate divisions that <a href="https://pratyush-dh.github.io/projects/blog/htcd4/">Part 2</a> showed carry almost all of the country's FIA-modeled (HTCD 4) heights. So each of the twelve highest-carbon divisions' carbon totals was split by the height method behind them: field-measured (HTCD 1), crew-estimated (HTCD 2/3, <a href="https://pratyush-dh.github.io/projects/blog/">Part 1</a> of this series), or FIA's own model (HTCD 4, Part 2).</p>
+<figure>
+<img src="figures/h04_connector_htcd_share.png" alt="Figure 6" loading="lazy" decoding="async"/>
+<figcaption>Figure 6. The twelve highest-carbon divisions from Table 1, in the same rank order, split by the height method behind their carbon: field-measured (HTCD 1), crew-estimated (HTCD 2/3), or FIA-modeled (HTCD 4).</figcaption>
+</figure>
+<p>The pattern is not subtle. Division 263 — a Mediterranean-climate division on the California coast, and the single highest-carbon division anywhere in this analysis at 77 tons/acre — gets less than half its carbon (48.6%) from a tree with a field-measured height; another 43.2% rests on FIA's own HTCD 4 model. The Marine division along the Washington and Oregon coast (M242, the single largest division in this dataset at 9,371 plots and the second-highest by carbon density) draws 23% of its carbon from modeled heights, matching Part 2's finding that this exact region holds 99.3% of the nation's HTCD 4 trees. Meanwhile the Appalachian and eastern "Hot/Warm Continental" divisions that round out the top twelve by carbon density — 221, M211, 211 — draw essentially none of theirs from FIA's model (0.00–0.08%); the small remainder beyond field measurement is a crew visual estimate (Part 1), not an HTCD 4 imputation (84.2–92.2% HTCD 1, the rest HTCD 2/3).</p>
+<p>To be precise about what this does and doesn't say: Part 2 found that FIA's own modeled heights are close to, not wildly different from, an independently-fit regional model, and the main study behind this whole series found that replacing modeled heights with an independent model moves national totals by well under half a percent. So this isn't evidence that the carbon numbers for the California coast are <em>wrong</em>. It's a second, independent reason — on top of the sampling-design argument above — that the plot-level confidence intervals in Table 1 understate the true uncertainty specifically for the divisions with the most carbon: those intervals carry no allowance for height-imputation uncertainty at all. The ecoregion with the most carbon at stake is also the one built most on height estimates rather than measurements, and the one where the grouping itself is least favorable to a tight estimate.</p>
+<h2>What I take from this</h2>
+<ul>
+<li>The regional differences in mean carbon density are real and statistically well-supported — not a one-test fluke, and not an artifact of skew or unequal variances, since four different tests on two different scales all agree.</li>
+<li>"Statistically significant" and "precisely known" aren't the same thing, for two independent reasons found here: ecodivision-level grouping is structurally noisier than state-level grouping for the same sample design, and the divisions with the most carbon at stake lean hardest on modeled rather than measured tree heights.</li>
+<li>Both of those reasons point the same direction — toward the Pacific coast and Mediterranean-climate divisions. If I were building a carbon-monitoring product on this data, I'd want an uncertainty band on those numbers specifically that's wider than the plot-sampling SE alone would suggest, and I'd rather quantify that than just footnote it.</li>
+</ul>
+<h2>Limitations</h2>
+<ul>
+<li><strong>Scope</strong>: live-tree carbon only (<code>CARBON_AG</code> + <code>CARBON_BG</code>). Soil organic carbon, standing and down dead wood, litter, and understory vegetation carbon are all reported by FIA at the condition level but are not included here.</li>
+<li><strong>"Current evaluation" isn't one year</strong>: each state's own most recent EXPCURR inventory cycle is used, consistent with the rest of this series, but that mixes inventory years across states rather than reflecting a single fixed national year.</li>
+<li><strong>The confidence intervals in Table 1 are plot-level, not design-based</strong>: they come from the raw plot-to-plot mean and standard error, not from FIA's full post-stratified variance estimator (used elsewhere in this project for population totals). That choice is appropriate for comparing density across groupings, but it means the intervals shown don't include every source of uncertainty FIA's own published estimates would.</li>
+<li><strong>The ecodivision-vs-state CV comparison is descriptive, not a formal variance decomposition</strong>: it's a Mann-Whitney comparison of two sets of group-level CVs, not a mixed-effects model partitioning variance into within-state and within-ecodivision components. It's consistent with — and the most parsimonious explanation for — the sampling-design argument made above, but it can't fully rule out that ecoregions are simply more ecologically heterogeneous than states as a matter of geography, independent of how the sample was designed.</li>
+<li><strong>Map labels and boundaries are generalized</strong>: division codes are placed at each polygon's representative point, and the Cleland division polygons themselves are a coarse, generalized layer; fine-scale variation within a division isn't visible at this resolution.</li>
+<li>This is an independent analysis, not an official FIA product, and not peer reviewed. Corrections welcome.</li>
+</ul>
+<h2>Data and code</h2>
+<p>This post builds on <a href="https://pratyush-dh.github.io/projects/blog/">Part 1</a> and <a href="https://pratyush-dh.github.io/projects/blog/htcd4/">Part 2</a> of this series — read those first for the HTCD background and the regional height model referenced above. Scripts, full result tables (every test statistic, all 595 pairwise comparisons, the state-level CV comparison, the division-by-HTCD carbon split) and print-quality figures for this post are in <a href="https://github.com/pratyush-dh/projects/tree/main/blog/carbon_ecoregion"><code>carbon_ecoregion</code></a>. As with the rest of this series, this reads the public FIADB SQLite export directly — no database server needed to reproduce it.</p>
+</article>
+<footer class="site-foot">
+<p>Draft analysis, not peer reviewed and not an official FIA product. Corrections and questions are welcome: <a href="https://github.com/pratyush-dh/projects/issues">open an issue</a>. Source: <a href="https://github.com/pratyush-dh/projects/tree/main/blog/carbon_ecoregion">pratyush-dh/projects</a>. Author: <a href="https://pratyush-dh.github.io/">Pratyush Dhungana</a>.</p>
+</footer>
+</body>
+</html>
