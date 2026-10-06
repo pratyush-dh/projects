@@ -1,0 +1,5 @@
+# raw inputs, user uploads and caches (rebuilt or re-downloaded on demand)
+prism_annual/
+prism_ppt_us_30s_2020_avg_30y/
+uploads/
+__pycache__/

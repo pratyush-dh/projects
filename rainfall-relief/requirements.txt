@@ -1,0 +1,8 @@
+numpy
+scipy
+rasterio
+scikit-image
+shapely
+pyproj
+pillow
+affine
