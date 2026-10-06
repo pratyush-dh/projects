@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rain relief: US annual precipitation as terrain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<style>
+  :root {
+    --ink: #0a1017;
+    --panel: rgba(14, 22, 31, 0.88);
+    --line: rgba(190, 215, 230, 0.16);
+    --text: #d8e4ec;
+    --dim: #8aa0b0;
+    --accent: #7fd0e6;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--text); }
+  #map, #map2 { position: absolute; top: 0; bottom: 0; left: 0; right: 0; }
+  #map2 { display: none; }
+  body.split #map { right: 50%; }
+  body.split #map2 { display: block; left: 50%; border-left: 2px solid var(--line); }
+  .tag {
+    position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); display: none;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 6px 12px; font-size: 13px; font-variant-numeric: tabular-nums; z-index: 2;
+  }
+  .tag small { color: var(--dim); font-size: 11px; margin-left: 6px; }
+  body.split .tag { display: block; }
+  #tag1 { left: 50px; }
+  #tag2 { left: calc(50% + 14px); }
+  body.split .readout { display: none; }
+  .cap, .cap1 { font-size: 11px; color: var(--dim); margin-bottom: 4px; line-height: 1.35; }
+  .cap { display: none; }
+  body.split .cap1 { display: none; }
+  #ticks2 { display: none; }
+  body.split .cap, body.split #ticks2 { display: block; }
+  #ticks, #ticks2 { height: 18px; }
+  #ticks2 span { color: var(--accent); }
+
+  .panel {
+    position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: min(320px, calc(100vw - 24px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 14px 12px; backdrop-filter: blur(8px);
+  }
+  .head { display: flex; justify-content: space-between; align-items: center; }
+  .ghost, .pill {
+    font: inherit; font-size: 12px; color: var(--dim); background: transparent;
+    border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; cursor: pointer;
+  }
+  .ghost:hover, .pill:hover { color: var(--text); }
+  .pill {
+    display: none; position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); backdrop-filter: blur(8px); font-size: 13px; padding: 7px 14px; border-radius: 8px;
+  }
+  body.off .panel { display: none; }
+  body.off .pill { display: block; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: .01em; }
+  .sub { font-size: 12px; color: var(--dim); margin: 0 0 12px; line-height: 1.4; }
+  .sub a { color: var(--accent); }
+
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  .row label { flex: 0 0 74px; color: var(--dim); }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row output { flex: 0 0 44px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .seg { display: flex; flex: 1; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    flex: 1; padding: 6px 0; font: inherit; font-size: 13px; color: var(--dim);
+    background: transparent; border: 0; cursor: pointer;
+  }
+  .seg button[aria-pressed=true] { background: rgba(127, 208, 230, .16); color: var(--text); }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .checks { display: flex; gap: 16px; margin-top: 10px; font-size: 13px; }
+  .checks label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .checks input { accent-color: var(--accent); }
+
+  .legend { margin-top: 12px; }
+  .bar { height: 10px; border-radius: 3px; }
+  .ticks { position: relative; height: 16px; font-size: 11px; color: var(--dim); margin-top: 3px; }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ticks span:first-child { transform: none; }
+  .ticks span:last-child { transform: translateX(-100%); }
+
+  .readout {
+    position: absolute; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 8px 12px; font-size: 13px; min-width: 112px; font-variant-numeric: tabular-nums;
+  }
+  .readout small { display: block; color: var(--dim); font-size: 11px; }
+  .err {
+    position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+    padding: 24px; line-height: 1.5; color: var(--dim);
+  }
+  .err code { color: var(--text); }
+  @media (max-width: 520px) { .sub { display: none; } .readout { display: none; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="map2"></div>
+<div class="tag" id="tag1">Rainfall as terrain<small id="rv1">&ndash;</small></div>
+<div class="tag" id="tag2">Actual elevation<small id="ev2">&ndash;</small></div>
+
+<div class="panel" id="panel" hidden>
+  <div class="head"><h1>Rain relief</h1><button id="hide" class="ghost" aria-label="Hide controls">Hide</button></div>
+  <p class="sub">Annual precipitation as elevation. Contours are isohyets in true mm. <a href="pulse.html">See it pulse year by year &rarr;</a></p>
+
+  <div class="row">
+    <label for="ex">Height</label>
+    <input id="ex" type="range" min="1" max="100" step="1" value="100">
+    <output id="exv">100×</output>
+  </div>
+  <div class="row">
+    <label for="rgbo">Imagery</label>
+    <input id="rgbo" type="range" min="0" max="100" step="1" value="0">
+    <output id="rgbov">0%</output>
+  </div>
+  <div class="row">
+    <label>Scale</label>
+    <div class="seg" role="group" aria-label="Height scale">
+      <button id="m-sqrt" aria-pressed="true">Square root</button>
+      <button id="m-linear" aria-pressed="false">Linear</button>
+    </div>
+  </div>
+  <div class="checks">
+    <label><input type="checkbox" id="c-iso" checked> Isohyets</label>
+    <label><input type="checkbox" id="c-lab" checked> Labels</label>
+    <label><input type="checkbox" id="c-cmp"> Compare</label>
+  </div>
+
+  <div class="legend">
+    <div class="cap1">Annual precipitation (mm)</div>
+    <div class="cap">Min&ndash;max scaled, one gradient. Top: rainfall (mm). Bottom: elevation (m).</div>
+    <div class="bar" id="bar"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="ticks" id="ticks2"></div>
+  </div>
+</div>
+
+<button id="show" class="pill">Controls</button>
+
+<div class="readout" id="readout" hidden>
+  <span id="rv">&ndash;</span><small>annual precip</small>
+</div>
+
+<div class="err" id="err">
+  <div>
+    Could not load <code>rain_relief_out/meta.json</code>.<br>
+    Run <code>build_rain_relief.py</code>, then serve this folder with<br>
+    <code>python -m http.server</code> and open <code>localhost:8000</code>.
+  </div>
+</div>
+
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script>
+const OUT = "rain_relief_out";
+const base = location.origin + location.pathname.replace(/[^/]*$/, "") + OUT;
+
+fetch(`${base}/meta.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(init).catch(() => { document.getElementById("err").style.display = "grid"; });
+
+function init(meta) {
+  const [w, s, e, n] = meta.bounds;
+  let mode = "sqrt";
+  const dem = m => ({
+    type: "raster-dem", tiles: [`${base}/tiles/dem_${m}/{z}/{x}/{y}.png`],
+    tileSize: 256, encoding: "mapbox", minzoom: meta.zmin, maxzoom: meta.zmax,
+    bounds: [w, s, e, n],
+  });
+
+  // True-colour satellite (Sentinel-2 cloudless, EOX), draped on either terrain.
+  const rgbSource = {
+    type: "raster", tileSize: 256, maxzoom: 12, bounds: [w, s, e, n],
+    tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg"],
+    attribution: "Imagery: Sentinel-2 cloudless by EOX (CC BY-NC-SA 4.0)",
+  };
+
+  const map = new maplibregl.Map({
+    container: "map",
+    center: [(w + e) / 2, (s + n) / 2 - 1], zoom: 3.4, pitch: 62, bearing: -12, maxPitch: 85,
+    style: {
+      version: 8,
+      glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+      sources: {
+        dem_sqrt: dem("sqrt"),
+        dem_linear: dem("linear"),
+        color: { type: "raster", tiles: [`${base}/tiles/color/{z}/{x}/{y}.png`], tileSize: 256,
+                 minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n] },
+        rgb: rgbSource,
+        iso: { type: "geojson", data: `${base}/isohyets.geojson` },
+      },
+      layers: [
+        { id: "bg", type: "background", paint: { "background-color": "#0a1017" } },
+        { id: "color", type: "raster", source: "color",
+          paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } },
+        { id: "rgb", type: "raster", source: "rgb", paint: { "raster-opacity": 0, "raster-fade-duration": 0 } },
+        { id: "iso-minor", type: "line", source: "iso", filter: ["!", ["get", "major"]],
+          paint: { "line-color": "rgba(255,255,255,0.28)", "line-width": 0.6 } },
+        { id: "iso-major", type: "line", source: "iso", filter: ["get", "major"],
+          paint: { "line-color": "rgba(255,255,255,0.8)", "line-width": 1.3 } },
+        { id: "iso-label", type: "symbol", source: "iso", filter: ["get", "major"],
+          layout: { "symbol-placement": "line", "symbol-spacing": 420, "text-field": ["get", "label"],
+                    "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-size": 11,
+                    "text-keep-upright": true },
+          paint: { "text-color": "#ffffff", "text-halo-color": "rgba(10,16,23,0.85)", "text-halo-width": 1.4 } },
+      ],
+    },
+  });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
+
+  const ex = document.getElementById("ex"), exv = document.getElementById("exv");
+  const rgbo = document.getElementById("rgbo"), rgbov = document.getElementById("rgbov");
+  let map2 = null;
+
+  // ---- Real elevation, painted with the rainfall ramp --------------------
+  // Elevation 0..ELEV_MAX m is mapped onto 0..RAMP_TOP mm of the rainfall ramp, so
+  // both maps share one gradient. Tiles are built client-side from AWS Terrarium
+  // elevation, masked to the rainfall footprint, with the same baked hillshade.
+  const ELEV_MAX = 4400, ORIGIN = 20037508.342789244, VE = 6;
+  const ramp = meta.ramp, RAMP_TOP = ramp[ramp.length - 1][0];
+  const rampX = ramp.map(r => Math.sqrt(r[0]));
+  const rampC = ramp.map(r => [1, 3, 5].map(i => parseInt(r[1].substr(i, 2), 16)));
+  const LUT = Array.from({ length: 1024 }, (_, i) => {
+    const x = Math.sqrt(i / 1023 * RAMP_TOP);
+    let k = 1; while (k < rampX.length - 1 && x > rampX[k]) k++;
+    const f = Math.min(1, Math.max(0, (x - rampX[k - 1]) / (rampX[k] - rampX[k - 1])));
+    return rampC[k - 1].map((c, j) => c + (rampC[k][j] - c) * f);
+  });
+  // Light from azimuth 315, altitude 45 (same as the Python baker).
+  const AZ = Math.PI * 1.75, LX = Math.cos(Math.PI / 4) * Math.sin(AZ),
+        LY = Math.cos(Math.PI / 4) * Math.cos(AZ), LZ = Math.sin(Math.PI / 4);
+
+  maplibregl.addProtocol("elevcolor", async (params, ac) => {
+    const [z, x, y] = params.url.replace("elevcolor://", "").split("/").map(Number);
+    const load = async u => { const r = await fetch(u, { signal: ac.signal }); return r.ok ? createImageBitmap(await r.blob()) : null; };
+    const [eb, mb] = await Promise.all([
+      load(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`),
+      load(`${base}/tiles/color/${z}/${x}/${y}.png`)]);
+    const cv = new OffscreenCanvas(256, 256), ctx = cv.getContext("2d", { willReadFrequently: true });
+    if (eb && mb) {
+      ctx.drawImage(eb, 0, 0); const ed = ctx.getImageData(0, 0, 256, 256).data;
+      ctx.clearRect(0, 0, 256, 256); ctx.drawImage(mb, 0, 0); const md = ctx.getImageData(0, 0, 256, 256).data;
+      const H = new Float32Array(65536);
+      for (let i = 0; i < 65536; i++) H[i] = Math.max(0, ed[i * 4] * 256 + ed[i * 4 + 1] + ed[i * 4 + 2] / 256 - 32768);
+      const cell = 2 * ORIGIN / 2 ** z / 256, out = ctx.createImageData(256, 256), o = out.data;
+      for (let r = 0; r < 256; r++) for (let c = 0; c < 256; c++) {
+        const i = r * 256 + c;
+        if (!md[i * 4 + 3]) continue;
+        const c0 = Math.max(0, c - 1), c1 = Math.min(255, c + 1), r0 = Math.max(0, r - 1), r1 = Math.min(255, r + 1);
+        const gx = (H[r * 256 + c1] - H[r * 256 + c0]) / (cell * (c1 - c0));
+        const gy = (H[r1 * 256 + c] - H[r0 * 256 + c]) / (cell * (r1 - r0));
+        const nx = -VE * gx, ny = VE * gy, norm = Math.hypot(nx, ny, 1);   // rows run south: flip gy
+        const sh = Math.min(1.8, Math.max(0, (nx * LX + ny * LY + LZ) / norm / LZ));
+        const col = LUT[Math.round(Math.min(1, H[i] / ELEV_MAX) * 1023)], k = 0.4 + 0.6 * sh;
+        o[i * 4] = col[0] * k; o[i * 4 + 1] = col[1] * k; o[i * 4 + 2] = col[2] * k; o[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+    }
+    return { data: await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer() };
+  });
+
+  // ---- Compare map -------------------------------------------------------
+  const setTerrain = () => {
+    map.setTerrain({ source: `dem_${mode}`, exaggeration: +ex.value });
+    if (map2 && map2.getSource("elev")) map2.setTerrain({ source: "elev", exaggeration: +ex.value });
+    if (map2) syncFrom(map);
+  };
+
+  function makeElevMap() {
+    const m = new maplibregl.Map({
+      container: "map2", center: map.getCenter(), zoom: map.getZoom(),
+      pitch: map.getPitch(), bearing: map.getBearing(), maxPitch: 85,
+      style: {
+        version: 8,
+        sources: {
+          elev: { type: "raster-dem", encoding: "terrarium", tileSize: 256, minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n],
+                  tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+                  attribution: "Terrain: Mapzen / AWS Terrain Tiles" },
+          elevcolor: { type: "raster", tiles: ["elevcolor://{z}/{x}/{y}"], tileSize: 256,
+                       minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n] },
+          rgb: rgbSource,
+        },
+        layers: [
+          { id: "bg", type: "background", paint: { "background-color": "#0a1017" } },
+          { id: "elevcolor", type: "raster", source: "elevcolor",
+            paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } },
+          { id: "rgb", type: "raster", source: "rgb",
+            paint: { "raster-opacity": rgbo.value / 100, "raster-fade-duration": 0 } },
+        ],
+      },
+    });
+    m.on("style.load", setTerrain);
+    m.on("mousemove", ev => {
+      const el = document.getElementById("ev2");
+      try {
+        const v = m.queryTerrainElevation(ev.lngLat) / +ex.value;
+        el.textContent = isFinite(v) ? `${Math.round(v).toLocaleString()} m` : "–";
+      } catch { el.textContent = "–"; }
+    });
+    return m;
+  }
+
+  // Lock center / zoom / bearing / pitch between the two maps.
+  let syncing = false;
+  function syncFrom(a) {
+    const b = a === map ? map2 : map;
+    if (!b || syncing) return;
+    syncing = true;
+    try {
+      b.jumpTo({ center: a.getCenter(), zoom: a.getZoom(), bearing: a.getBearing(), pitch: a.getPitch() });
+    } finally { syncing = false; }
+  }
+  // Only the pane the user is touching drives the other; otherwise each map's own
+  // terrain-height camera corrections would echo back and drift the views apart.
+  let driver = map;
+  const link = a => {
+    for (const t of ["pointerdown", "wheel", "touchstart", "keydown"])
+      a.getContainer().addEventListener(t, () => { driver = a; }, { passive: true, capture: true });
+    a.on("move", () => { if (driver === a) syncFrom(a); });
+  };
+
+  document.getElementById("c-cmp").addEventListener("change", ev => {
+    document.body.classList.toggle("split", ev.target.checked);
+    map.resize();
+    if (ev.target.checked && !map2) {
+      map2 = makeElevMap();
+      link(map); link(map2);
+    }
+    if (map2) { map2.resize(); map.setZoom(map.getZoom() + (ev.target.checked ? -0.7 : 0.7)); syncFrom(map); }
+  });
+
+  rgbo.addEventListener("input", () => {
+    rgbov.textContent = rgbo.value + "%";
+    for (const m of [map, map2]) if (m && m.getLayer("rgb")) m.setPaintProperty("rgb", "raster-opacity", rgbo.value / 100);
+  });
+
+  map.on("style.load", setTerrain);
+  map.on("load", () => {
+    setTerrain();
+    document.getElementById("panel").hidden = false;
+    document.getElementById("readout").hidden = false;
+  });
+
+  ex.addEventListener("input", () => { exv.textContent = ex.value + "×"; setTerrain(); });
+
+  for (const m of ["sqrt", "linear"]) {
+    document.getElementById("m-" + m).addEventListener("click", () => {
+      mode = m;
+      for (const k of ["sqrt", "linear"])
+        document.getElementById("m-" + k).setAttribute("aria-pressed", k === m);
+      setTerrain();
+    });
+  }
+
+  const vis = (ids, on) => ids.forEach(id => map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+  document.getElementById("c-iso").addEventListener("change", ev => vis(["iso-minor", "iso-major"], ev.target.checked));
+  document.getElementById("c-lab").addEventListener("change", ev => vis(["iso-label"], ev.target.checked));
+
+  // Hover readout: invert the terrain encoding back to mm.
+  const rv = document.getElementById("rv");
+  map.on("mousemove", ev => {
+    try {
+      const h = map.queryTerrainElevation(ev.lngLat) / +ex.value; // includes exaggeration
+      if (!isFinite(h) || h < 1) { rv.textContent = "–"; return; }
+      const mm = mode === "linear" ? h : (h * h) / meta.mm_max;
+      rv.textContent = `${Math.round(mm).toLocaleString()} mm`;
+      document.getElementById("rv1").textContent = rv.textContent;
+    } catch { rv.textContent = "–"; }
+  });
+
+  // Legend: ramp is interpolated in sqrt(mm), so ticks sit on that axis too.
+  // One bar, min -> max. Position p runs 0..1 on the sqrt axis the ramp is built on:
+  // rainfall = RAMP_TOP * p^2 (mm), elevation = ELEV_MAX * p^2 (m). Same p, same colour.
+  const top = Math.sqrt(RAMP_TOP);
+  const stops = ramp.map(([mm, c]) => `${c} ${(Math.sqrt(mm) / top * 100).toFixed(1)}%`).join(", ");
+  document.getElementById("bar").style.background = `linear-gradient(90deg, ${stops})`;
+  const addTicks = (el, max, unit) => [0, .25, .5, .75, 1].forEach(p => {
+    const t = document.createElement("span");
+    t.style.left = p * 100 + "%";
+    t.textContent = (Math.round(max * p * p / 5) * 5).toLocaleString();
+    el.appendChild(t);
+  });
+  addTicks(document.getElementById("ticks"), RAMP_TOP, "mm");
+  addTicks(document.getElementById("ticks2"), ELEV_MAX, "m");
+
+  // Hide / show the control panel (button, or press H).
+  const setOff = off => document.body.classList.toggle("off", off);
+  document.getElementById("hide").addEventListener("click", () => setOff(true));
+  document.getElementById("show").addEventListener("click", () => setOff(false));
+  addEventListener("keydown", ev => {
+    if (ev.key.toLowerCase() === "h" && !ev.ctrlKey && !ev.metaKey && !/INPUT|TEXTAREA/.test(ev.target.tagName))
+      setOff(!document.body.classList.contains("off"));
+  });
+}
+</script>
+<script>
+const OUT = "rain_relief_out";
+const base = location.origin + location.pathname.replace(/[^/]*$/, "") + OUT;
+
+fetch(`${base}/meta.json`).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .then(init).catch(() => { document.getElementById("err").style.display = "grid"; });
+
+function init(meta) {
+  const [w, s, e, n] = meta.bounds;
+  let mode = "sqrt";
+  const dem = m => ({
+    type: "raster-dem", tiles: [`${base}/tiles/dem_${m}/{z}/{x}/{y}.png`],
+    tileSize: 256, encoding: "mapbox", minzoom: meta.zmin, maxzoom: meta.zmax,
+    bounds: [w, s, e, n],
+  });
+
+  // True-colour satellite (Sentinel-2 cloudless, EOX), draped on either terrain.
+  const rgbSource = {
+    type: "raster", tileSize: 256, maxzoom: 12, bounds: [w, s, e, n],
+    tiles: ["https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless-2021_3857/default/g/{z}/{y}/{x}.jpg"],
+    attribution: "Imagery: Sentinel-2 cloudless by EOX (CC BY-NC-SA 4.0)",
+  };
+
+  const map = new maplibregl.Map({
+    container: "map",
+    center: [(w + e) / 2, (s + n) / 2 - 1], zoom: 3.4, pitch: 62, bearing: -12, maxPitch: 85,
+    style: {
+      version: 8,
+      glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
+      sources: {
+        dem_sqrt: dem("sqrt"),
+        dem_linear: dem("linear"),
+        color: { type: "raster", tiles: [`${base}/tiles/color/{z}/{x}/{y}.png`], tileSize: 256,
+                 minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n] },
+        rgb: rgbSource,
+        iso: { type: "geojson", data: `${base}/isohyets.geojson` },
+      },
+      layers: [
+        { id: "bg", type: "background", paint: { "background-color": "#0a1017" } },
+        { id: "color", type: "raster", source: "color",
+          paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } },
+        { id: "rgb", type: "raster", source: "rgb", paint: { "raster-opacity": 0, "raster-fade-duration": 0 } },
+        { id: "iso-minor", type: "line", source: "iso", filter: ["!", ["get", "major"]],
+          paint: { "line-color": "rgba(255,255,255,0.28)", "line-width": 0.6 } },
+        { id: "iso-major", type: "line", source: "iso", filter: ["get", "major"],
+          paint: { "line-color": "rgba(255,255,255,0.8)", "line-width": 1.3 } },
+        { id: "iso-label", type: "symbol", source: "iso", filter: ["get", "major"],
+          layout: { "symbol-placement": "line", "symbol-spacing": 420, "text-field": ["get", "label"],
+                    "text-font": ["Open Sans Regular", "Arial Unicode MS Regular"], "text-size": 11,
+                    "text-keep-upright": true },
+          paint: { "text-color": "#ffffff", "text-halo-color": "rgba(10,16,23,0.85)", "text-halo-width": 1.4 } },
+      ],
+    },
+  });
+  map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), "top-left");
+
+  const ex = document.getElementById("ex"), exv = document.getElementById("exv");
+  const rgbo = document.getElementById("rgbo"), rgbov = document.getElementById("rgbov");
+  let map2 = null;
+
+  // ---- Real elevation, painted with the rainfall ramp --------------------
+  // Elevation 0..ELEV_MAX m is mapped onto 0..RAMP_TOP mm of the rainfall ramp, so
+  // both maps share one gradient. Tiles are built client-side from AWS Terrarium
+  // elevation, masked to the rainfall footprint, with the same baked hillshade.
+  const ELEV_MAX = 4400, ORIGIN = 20037508.342789244, VE = 6;
+  const ramp = meta.ramp, RAMP_TOP = ramp[ramp.length - 1][0];
+  const rampX = ramp.map(r => Math.sqrt(r[0]));
+  const rampC = ramp.map(r => [1, 3, 5].map(i => parseInt(r[1].substr(i, 2), 16)));
+  const LUT = Array.from({ length: 1024 }, (_, i) => {
+    const x = Math.sqrt(i / 1023 * RAMP_TOP);
+    let k = 1; while (k < rampX.length - 1 && x > rampX[k]) k++;
+    const f = Math.min(1, Math.max(0, (x - rampX[k - 1]) / (rampX[k] - rampX[k - 1])));
+    return rampC[k - 1].map((c, j) => c + (rampC[k][j] - c) * f);
+  });
+  // Light from azimuth 315, altitude 45 (same as the Python baker).
+  const AZ = Math.PI * 1.75, LX = Math.cos(Math.PI / 4) * Math.sin(AZ),
+        LY = Math.cos(Math.PI / 4) * Math.cos(AZ), LZ = Math.sin(Math.PI / 4);
+
+  maplibregl.addProtocol("elevcolor", async (params, ac) => {
+    const [z, x, y] = params.url.replace("elevcolor://", "").split("/").map(Number);
+    const load = async u => { const r = await fetch(u, { signal: ac.signal }); return r.ok ? createImageBitmap(await r.blob()) : null; };
+    const [eb, mb] = await Promise.all([
+      load(`https://s3.amazonaws.com/elevation-tiles-prod/terrarium/${z}/${x}/${y}.png`),
+      load(`${base}/tiles/color/${z}/${x}/${y}.png`)]);
+    const cv = new OffscreenCanvas(256, 256), ctx = cv.getContext("2d", { willReadFrequently: true });
+    if (eb && mb) {
+      ctx.drawImage(eb, 0, 0); const ed = ctx.getImageData(0, 0, 256, 256).data;
+      ctx.clearRect(0, 0, 256, 256); ctx.drawImage(mb, 0, 0); const md = ctx.getImageData(0, 0, 256, 256).data;
+      const H = new Float32Array(65536);
+      for (let i = 0; i < 65536; i++) H[i] = Math.max(0, ed[i * 4] * 256 + ed[i * 4 + 1] + ed[i * 4 + 2] / 256 - 32768);
+      const cell = 2 * ORIGIN / 2 ** z / 256, out = ctx.createImageData(256, 256), o = out.data;
+      for (let r = 0; r < 256; r++) for (let c = 0; c < 256; c++) {
+        const i = r * 256 + c;
+        if (!md[i * 4 + 3]) continue;
+        const c0 = Math.max(0, c - 1), c1 = Math.min(255, c + 1), r0 = Math.max(0, r - 1), r1 = Math.min(255, r + 1);
+        const gx = (H[r * 256 + c1] - H[r * 256 + c0]) / (cell * (c1 - c0));
+        const gy = (H[r1 * 256 + c] - H[r0 * 256 + c]) / (cell * (r1 - r0));
+        const nx = -VE * gx, ny = VE * gy, norm = Math.hypot(nx, ny, 1);   // rows run south: flip gy
+        const sh = Math.min(1.8, Math.max(0, (nx * LX + ny * LY + LZ) / norm / LZ));
+        const col = LUT[Math.round(Math.min(1, H[i] / ELEV_MAX) * 1023)], k = 0.4 + 0.6 * sh;
+        o[i * 4] = col[0] * k; o[i * 4 + 1] = col[1] * k; o[i * 4 + 2] = col[2] * k; o[i * 4 + 3] = 255;
+      }
+      ctx.putImageData(out, 0, 0);
+    }
+    return { data: await (await cv.convertToBlob({ type: "image/png" })).arrayBuffer() };
+  });
+
+  // ---- Compare map -------------------------------------------------------
+  const setTerrain = () => {
+    map.setTerrain({ source: `dem_${mode}`, exaggeration: +ex.value });
+    if (map2 && map2.getSource("elev")) map2.setTerrain({ source: "elev", exaggeration: +ex.value });
+    if (map2) syncFrom(map);
+  };
+
+  function makeElevMap() {
+    const m = new maplibregl.Map({
+      container: "map2", center: map.getCenter(), zoom: map.getZoom(),
+      pitch: map.getPitch(), bearing: map.getBearing(), maxPitch: 85,
+      style: {
+        version: 8,
+        sources: {
+          elev: { type: "raster-dem", encoding: "terrarium", tileSize: 256, minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n],
+                  tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
+                  attribution: "Terrain: Mapzen / AWS Terrain Tiles" },
+          elevcolor: { type: "raster", tiles: ["elevcolor://{z}/{x}/{y}"], tileSize: 256,
+                       minzoom: meta.zmin, maxzoom: meta.zmax, bounds: [w, s, e, n] },
+          rgb: rgbSource,
+        },
+        layers: [
+          { id: "bg", type: "background", paint: { "background-color": "#0a1017" } },
+          { id: "elevcolor", type: "raster", source: "elevcolor",
+            paint: { "raster-fade-duration": 0, "raster-resampling": "linear" } },
+          { id: "rgb", type: "raster", source: "rgb",
+            paint: { "raster-opacity": rgbo.value / 100, "raster-fade-duration": 0 } },
+        ],
+      },
+    });
+    m.on("style.load", setTerrain);
+    m.on("mousemove", ev => {
+      const el = document.getElementById("ev2");
+      try {
+        const v = m.queryTerrainElevation(ev.lngLat) / +ex.value;
+        el.textContent = isFinite(v) ? `${Math.round(v).toLocaleString()} m` : "–";
+      } catch { el.textContent = "–"; }
+    });
+    return m;
+  }
+
+  // Lock center / zoom / bearing / pitch between the two maps.
+  let syncing = false;
+  function syncFrom(a) {
+    const b = a === map ? map2 : map;
+    if (!b || syncing) return;
+    syncing = true;
+    try {
+      b.jumpTo({ center: a.getCenter(), zoom: a.getZoom(), bearing: a.getBearing(), pitch: a.getPitch() });
+    } finally { syncing = false; }
+  }
+  // Only the pane the user is touching drives the other; otherwise each map's own
+  // terrain-height camera corrections would echo back and drift the views apart.
+  let driver = map;
+  const link = a => {
+    for (const t of ["pointerdown", "wheel", "touchstart", "keydown"])
+      a.getContainer().addEventListener(t, () => { driver = a; }, { passive: true, capture: true });
+    a.on("move", () => { if (driver === a) syncFrom(a); });
+  };
+
+  document.getElementById("c-cmp").addEventListener("change", ev => {
+    document.body.classList.toggle("split", ev.target.checked);
+    map.resize();
+    if (ev.target.checked && !map2) {
+      map2 = makeElevMap();
+      link(map); link(map2);
+    }
+    if (map2) { map2.resize(); map.setZoom(map.getZoom() + (ev.target.checked ? -0.7 : 0.7)); syncFrom(map); }
+  });
+
+  rgbo.addEventListener("input", () => {
+    rgbov.textContent = rgbo.value + "%";
+    for (const m of [map, map2]) if (m && m.getLayer("rgb")) m.setPaintProperty("rgb", "raster-opacity", rgbo.value / 100);
+  });
+
+  map.on("style.load", setTerrain);
+  map.on("load", () => {
+    setTerrain();
+    document.getElementById("panel").hidden = false;
+    document.getElementById("readout").hidden = false;
+  });
+
+  ex.addEventListener("input", () => { exv.textContent = ex.value + "×"; setTerrain(); });
+
+  for (const m of ["sqrt", "linear"]) {
+    document.getElementById("m-" + m).addEventListener("click", () => {
+      mode = m;
+      for (const k of ["sqrt", "linear"])
+        document.getElementById("m-" + k).setAttribute("aria-pressed", k === m);
+      setTerrain();
+    });
+  }
+
+  const vis = (ids, on) => ids.forEach(id => map.setLayoutProperty(id, "visibility", on ? "visible" : "none"));
+  document.getElementById("c-iso").addEventListener("change", ev => vis(["iso-minor", "iso-major"], ev.target.checked));
+  document.getElementById("c-lab").addEventListener("change", ev => vis(["iso-label"], ev.target.checked));
+
+  // Hover readout: invert the terrain encoding back to mm.
+  const rv = document.getElementById("rv");
+  map.on("mousemove", ev => {
+    try {
+      const h = map.queryTerrainElevation(ev.lngLat) / +ex.value; // includes exaggeration
+      if (!isFinite(h) || h < 1) { rv.textContent = "–"; return; }
+      const mm = mode === "linear" ? h : (h * h) / meta.mm_max;
+      rv.textContent = `${Math.round(mm).toLocaleString()} mm`;
+      document.getElementById("rv1").textContent = rv.textContent;
+    } catch { rv.textContent = "–"; }
+  });
+
+  // Legend: ramp is interpolated in sqrt(mm), so ticks sit on that axis too.
+  const top = Math.sqrt(RAMP_TOP);
+  const stops = ramp.map(([mm, c]) => `${c} ${(Math.sqrt(mm) / top * 100).toFixed(1)}%`).join(", ");
+  document.getElementById("bar").style.background = `linear-gradient(90deg, ${stops})`;
+  const ticks = document.getElementById("ticks");
+  for (const mm of [0, 250, 500, 1000, 2000, 4000, 6000]) {
+    const t = document.createElement("span");
+    t.style.left = (Math.sqrt(mm) / top * 100) + "%";
+    t.textContent = mm === 6000 ? "6,000 mm" : mm.toLocaleString();
+    ticks.appendChild(t);
+  }
+  document.getElementById("bar2").style.background = `linear-gradient(90deg, ${stops})`;
+  for (const m of [0, 100, 250, 500, 1000, 2000, 3000, 4400]) {
+    const t = document.createElement("span");
+    t.style.left = (Math.sqrt(m / ELEV_MAX) * 100) + "%";
+    t.textContent = m === 4400 ? "4,400 m" : m.toLocaleString();
+    document.getElementById("ticks2").appendChild(t);
+  }
+}
+</script>
+</body>
+</html>

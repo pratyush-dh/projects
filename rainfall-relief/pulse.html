@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Rain pulse: annual change as terrain</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>
+  :root {
+    --ink: #0a1017;
+    --panel: rgba(14, 22, 31, 0.9);
+    --line: rgba(190, 215, 230, 0.16);
+    --text: #d8e4ec;
+    --dim: #8aa0b0;
+    --accent: #7fd0e6;
+    --warn: #e0a35c;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--ink); color: var(--text); overflow: hidden; }
+  #gl { position: absolute; inset: 0; display: block; }
+
+  .panel {
+    position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    width: min(340px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 14px 14px 12px; backdrop-filter: blur(8px);
+  }
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  h1 { font-size: 15px; font-weight: 600; margin: 0 0 2px; letter-spacing: .01em; }
+  .sub { font-size: 12px; color: var(--dim); margin: 0 0 10px; line-height: 1.4; }
+  .sub a { color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 13px; }
+  .row label { flex: 0 0 62px; color: var(--dim); }
+  .row input[type=range] { flex: 1; accent-color: var(--accent); }
+  .row output { flex: 0 0 44px; text-align: right; font-variant-numeric: tabular-nums; }
+  .seg { display: flex; flex: 1; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+  .seg button {
+    flex: 1; padding: 6px 0; font: inherit; font-size: 13px; color: var(--dim);
+    background: transparent; border: 0; cursor: pointer;
+  }
+  .seg button[aria-pressed=true] { background: rgba(127, 208, 230, .16); color: var(--text); }
+  #play {
+    width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line);
+    background: rgba(127, 208, 230, .16); color: var(--text); font-size: 14px; cursor: pointer;
+  }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .ghost, .pill, .btn {
+    font: inherit; font-size: 12px; color: var(--dim); background: transparent;
+    border: 1px solid var(--line); border-radius: 6px; padding: 4px 10px; cursor: pointer;
+  }
+  .ghost:hover, .pill:hover, .btn:hover { color: var(--text); }
+  .btn.primary { color: var(--text); background: rgba(127, 208, 230, .18); border-color: rgba(127, 208, 230, .45); }
+  .btn:disabled { opacity: .45; cursor: default; }
+  .pill {
+    display: none; position: absolute; left: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    background: var(--panel); backdrop-filter: blur(8px); font-size: 13px; padding: 7px 14px; border-radius: 8px;
+  }
+  body.off .panel { display: none; }
+  body.off .pill { display: block; }
+
+  input[type=number], input[type=text], select {
+    font: inherit; font-size: 13px; color: var(--text); background: rgba(255, 255, 255, .05);
+    border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; min-width: 0;
+  }
+  select option { background: #16212c; }
+  .yrs input[type=number] { width: 68px; font-variant-numeric: tabular-nums; }
+  .yrs span { color: var(--dim); }
+
+  .legend { margin-top: 10px; }
+  .bar { height: 10px; border-radius: 3px; }
+  .ticks { position: relative; height: 16px; font-size: 11px; color: var(--dim); margin-top: 3px; }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ticks span:first-child { transform: none; }
+  .ticks span:last-child { transform: translateX(-100%); }
+  .unit { font-size: 11px; color: var(--dim); margin-bottom: 4px; }
+
+  .status { font-size: 12px; color: var(--dim); margin-top: 8px; line-height: 1.4; min-height: 16px; }
+  .status.err { color: var(--warn); }
+  progress { width: 100%; height: 6px; accent-color: var(--accent); margin-top: 4px; display: none; }
+  progress.on { display: block; }
+
+  .hud {
+    position: absolute; right: 12px; top: calc(12px + env(safe-area-inset-top, 0px));
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 14px 8px; width: min(380px, calc(100vw - 24px)); font-variant-numeric: tabular-nums;
+  }
+  .ttl { font-size: 11px; color: var(--dim); margin-bottom: 2px; }
+  .year { font-size: 44px; font-weight: 600; line-height: 1; letter-spacing: -.01em; }
+  .stat { font-size: 12px; color: var(--dim); margin-top: 4px; }
+  .stat b { color: var(--text); font-weight: 600; }
+  #chart { width: 100%; height: 64px; display: block; margin-top: 8px; cursor: pointer; }
+  .err {
+    position: absolute; inset: 0; display: none; place-items: center; text-align: center;
+    padding: 24px; line-height: 1.5; color: var(--dim);
+  }
+  .err code { color: var(--text); }
+
+  /* data dialog */
+  .modal { position: absolute; inset: 0; display: none; place-items: center; background: rgba(5, 9, 14, .62); z-index: 5; }
+  .modal.on { display: grid; }
+  .card {
+    width: min(620px, calc(100vw - 24px)); max-height: calc(100vh - 24px); overflow: auto;
+    background: #0e1620; border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px 16px;
+  }
+  .card h2 { font-size: 16px; margin: 0; }
+  .card h3 { font-size: 13px; margin: 18px 0 6px; color: var(--accent); font-weight: 600; letter-spacing: .02em; }
+  .card p, .card li { font-size: 13px; color: var(--dim); line-height: 1.5; margin: 4px 0; }
+  .card ul { margin: 4px 0; padding-left: 18px; }
+  .card a { color: var(--accent); }
+  .card b { color: var(--text); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: 120px 1fr; gap: 8px 10px; align-items: center; font-size: 13px; margin: 10px 0; }
+  .grid label { color: var(--dim); }
+  .grid .full { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: var(--dim); }
+  .drop { border: 1px dashed rgba(127, 208, 230, .4); border-radius: 8px; padding: 12px; text-align: center; font-size: 13px; color: var(--dim); }
+  .drop.over { background: rgba(127, 208, 230, .1); }
+  .files { font-size: 12px; color: var(--dim); max-height: 90px; overflow: auto; margin-top: 6px; }
+  .nobackend { display: none; font-size: 12px; color: var(--warn); margin: 8px 0; line-height: 1.4; }
+  .nobackend code { color: var(--text); }
+  body.noapi .nobackend { display: block; }
+  body.noapi .needs-api { opacity: .45; pointer-events: none; }
+  @media (max-width: 560px) { .sub { display: none; } .hud { width: calc(100vw - 24px); } .year { font-size: 32px; } }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div class="hud" id="hud" hidden>
+  <div class="ttl" id="ttl"></div>
+  <div class="year" id="yr">&ndash;</div>
+  <div class="stat" id="stat"></div>
+  <canvas id="chart" aria-label="Area mean by period; click to jump"></canvas>
+</div>
+
+<div class="panel" id="panel" hidden>
+  <div class="head"><h1>Rain pulse</h1>
+    <span><button id="open-data" class="ghost">Data&hellip;</button> <button id="open-export" class="ghost">Export&hellip;</button> <button id="hide" class="ghost" aria-label="Hide controls">Hide</button></span>
+  </div>
+  <p class="sub" id="sub">Each period&rsquo;s value as height. High periods swell, low periods sink. <a href="index.html">30-year normal map &rarr;</a></p>
+
+  <div class="row">
+    <button id="play" aria-label="Play or pause">&#10074;&#10074;</button>
+    <input id="t" type="range" min="0" max="1" step="0.01" value="0" aria-label="Period">
+  </div>
+  <div class="row yrs">
+    <label for="y0">Years</label>
+    <input id="y0" type="number" step="1" aria-label="From year"><span>to</span>
+    <input id="y1" type="number" step="1" aria-label="To year">
+    <button id="go" class="btn primary">Go</button>
+  </div>
+  <div class="row">
+    <label for="sp">Speed</label>
+    <input id="sp" type="range" min="0.2" max="3" step="0.1" value="0.8">
+    <output id="spv">0.8/s</output>
+  </div>
+  <div class="row">
+    <label for="ex">Height</label>
+    <input id="ex" type="range" min="1" max="100" step="1" value="50">
+    <output id="exv">50&times;</output>
+  </div>
+  <div class="row">
+    <label>Colour</label>
+    <div class="seg" role="group" aria-label="Colour mode">
+      <button id="m-abs" aria-pressed="true">Value</button>
+      <button id="m-anom" aria-pressed="false">vs average</button>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="unit" id="unit"></div>
+    <div class="bar" id="bar"></div>
+    <div class="ticks" id="ticks"></div>
+  </div>
+  <div class="status" id="status"></div>
+  <progress id="prog" max="1" value="0"></progress>
+</div>
+<button id="show" class="pill">Controls</button>
+
+<div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="mt">
+  <div class="card">
+    <div class="head"><h2 id="mt">Data</h2><button id="close-data" class="ghost">Close</button></div>
+    <div class="nobackend">The upload engine isn&rsquo;t running. Stop this server and start
+      <code>python serve.py</code> in the RainFallMap folder to enable uploads and new PRISM years.</div>
+
+    <h3>Dataset</h3>
+    <div class="row" style="margin:6px 0"><select id="dsel" style="flex:1"></select>
+      <button id="dload" class="btn primary">Load</button></div>
+
+    <h3>Where to get data</h3>
+    <p>Any gridded series with one raster per year (or period) works. Some places to look:</p>
+    <ul>
+      <li><a href="https://prism.oregonstate.edu/" target="_blank" rel="noopener">PRISM</a>: US precipitation and temperature, 1895&ndash;now (built in)</li>
+      <li><a href="https://www.chc.ucsb.edu/data/chirps" target="_blank" rel="noopener">CHIRPS</a>: global rainfall, 1981&ndash;now, ~5&nbsp;km GeoTIFFs</li>
+      <li><a href="https://www.climatologylab.org/terraclimate.html" target="_blank" rel="noopener">TerraClimate</a>: global climate and water balance, ~4&nbsp;km</li>
+      <li><a href="https://cds.climate.copernicus.eu/datasets/reanalysis-era5-land" target="_blank" rel="noopener">ERA5-Land</a>: global reanalysis, 1950&ndash;now (export as GeoTIFF)</li>
+      <li><a href="https://www.ncei.noaa.gov/products/land-based-station/nclimgrid-monthly" target="_blank" rel="noopener">NOAA nClimGrid</a>: US temperature and precipitation, 5&nbsp;km</li>
+      <li><a href="https://gpm.nasa.gov/data" target="_blank" rel="noopener">NASA GPM IMERG</a>: global satellite rainfall</li>
+    </ul>
+
+    <h3>Upload your own</h3>
+    <p><b>One raster per year</b> (GeoTIFF, BIL, ASC or IMG; zips are fine) with the year in each file name, e.g.
+       <b>precip_2005.tif</b>, all covering the same area. Or <b>one multi-band GeoTIFF</b>, one band per period.
+       Any projection is reprojected for you. Max 2&nbsp;GB per file.</p>
+    <div class="drop needs-api" id="drop">Drop files here or <a href="#" id="pick">choose files</a>
+      <input id="files" type="file" multiple hidden accept=".tif,.tiff,.bil,.hdr,.prj,.asc,.img,.zip">
+      <div class="files" id="flist"></div>
+    </div>
+    <div class="grid needs-api">
+      <label for="u-name">Name</label><input id="u-name" type="text" placeholder="e.g. Kenya rainfall" maxlength="80">
+      <label for="u-credit">Source credit</label><input id="u-credit" type="text" placeholder="e.g. CHIRPS v2.0, UCSB CHC" maxlength="200">
+      <label for="u-unit">Unit</label><input id="u-unit" type="text" placeholder="mm, &deg;C, mm/day..." maxlength="16">
+      <label for="u-pal">Palette</label>
+      <select id="u-pal"><option value="viridis">Viridis (purple to yellow)</option><option value="rain">Rain (brown to blue)</option>
+        <option value="heat">Heat (blue to red)</option><option value="blues">Blues</option></select>
+      <label for="u-scale">Height scale</label>
+      <select id="u-scale"><option value="linear">Linear</option><option value="sqrt">Square root (lifts low values)</option></select>
+      <label for="u-anom">&ldquo;vs average&rdquo;</label>
+      <select id="u-anom"><option value="diff">Difference from average</option><option value="ratio">% of average</option></select>
+      <label for="u-start">First period</label><input id="u-start" type="number" step="1" value="1" title="Used only if file names have no year">
+      <div class="full"><input id="u-clip" type="checkbox"><label for="u-clip" style="color:inherit">Ignore the extreme 2% at each end when setting colours</label></div>
+    </div>
+    <div class="row needs-api" style="margin:6px 0"><button id="u-go" class="btn primary" disabled>Upload &amp; build</button>
+      <span class="status" id="u-status" style="margin:0"></span></div>
+    <progress id="u-prog" max="1" value="0"></progress>
+  </div>
+</div>
+
+<div class="modal" id="xmodal" role="dialog" aria-modal="true" aria-labelledby="xt">
+  <div class="card">
+    <div class="head"><h2 id="xt">Export</h2><button id="close-export" class="ghost">Close</button></div>
+    <p>Each image is composed with a title, the year, the layer description, the legend, an area-mean chart and the
+       data source. It uses your current camera angle, height, colour mode and year range, so set up the view first.</p>
+
+    <div class="grid">
+      <label for="x-title">Title</label><input id="x-title" type="text" maxlength="120">
+      <label for="x-source">Data source</label><input id="x-source" type="text" maxlength="300">
+      <div class="full"><input id="x-chart" type="checkbox" checked><label for="x-chart" style="color:inherit">Include the area-mean chart</label></div>
+    </div>
+
+    <h3>Formats</h3>
+    <div class="grid">
+      <div class="full"><input id="x-png" type="checkbox" checked><label for="x-png" style="color:inherit"><b>Yearly maps</b>: one PNG per year, in a ZIP</label></div>
+      <label for="x-psize">PNG size</label>
+      <select id="x-psize"><option value="1000">1000 &times; 720</option><option value="1400" selected>1400 &times; 1008</option><option value="2000">2000 &times; 1440</option></select>
+      <div class="full"><input id="x-gif" type="checkbox" checked><label for="x-gif" style="color:inherit"><b>Animated GIF</b>: the pulse, looping from the last year back to the first</label></div>
+      <label for="x-gsize">GIF size</label>
+      <select id="x-gsize"><option value="640">640 &times; 461</option><option value="800" selected>800 &times; 576</option><option value="1000">1000 &times; 720</option></select>
+      <label for="x-steps">Frames per year</label>
+      <select id="x-steps"><option value="1">1 (hard cuts)</option><option value="4">4</option><option value="6" selected>6 (smooth)</option><option value="10">10 (smoothest, larger file)</option></select>
+      <label for="x-hold">Hold each year</label>
+      <select id="x-hold"><option value="300">0.3 s</option><option value="600" selected>0.6 s</option><option value="1000">1 s</option><option value="1500">1.5 s</option></select>
+    </div>
+
+    <div class="grid">
+      <label for="x-zoom">Zoom</label>
+      <select id="x-zoom"><option value="1">1&times; (as on screen)</option><option value="1.4" selected>1.4&times;</option><option value="1.8">1.8&times;</option></select>
+    </div>
+
+    <div class="row" style="margin:10px 0 0"><button id="x-run" class="btn primary">Export</button>
+      <button id="x-one" class="btn">Save current frame</button>
+      <button id="x-cancel" class="btn" style="display:none">Cancel</button></div>
+    <div class="status" id="x-status"></div>
+    <progress id="x-prog" max="1" value="0"></progress>
+  </div>
+</div>
+
+<div class="err" id="err">
+  <div>
+    Could not load <code>pulse_data/</code>.<br>
+    Run <code>python build_rain_years.py</code>, then <code>python serve.py</code> and open
+    <code>localhost:8000/pulse.html</code>.
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const NODATA = -1e30;
+const hex = c => [1, 3, 5].map(i => parseInt(c.substr(i, 2), 16));
+const even = cols => cols.map((c, i) => [i / (cols.length - 1), c]);
+const PALETTES = {
+  // positions are on the 0..1 display axis (already sqrt'd if the dataset uses a sqrt scale)
+  rain: [[0,"#6b3d1e"],[150,"#b57a3c"],[300,"#d9b66a"],[500,"#e8e2a6"],[800,"#a9d18e"],[1100,"#5fb58a"],
+         [1500,"#2a9d9a"],[2000,"#1f7aa8"],[3000,"#2a4fa0"],[4500,"#432a85"],[6000,"#7a2a8f"]]
+         .map(([mm, c]) => [Math.sqrt(mm / 6000), c]),
+  heat: even(["#2b4ba8", "#5fa8d3", "#e8e6c8", "#f2a65a", "#d1431e", "#7a0c1c"]),
+  viridis: even(["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"]),
+  blues: even(["#f7fbff", "#c6dbef", "#6baed6", "#2171b5", "#08306b"]),
+};
+const DRY = [140, 81, 10], MID = [245, 245, 240], WET = [1, 102, 94];     // "vs average" scale
+const ANOM_RATIO = 0.5, ANOM_DIFF = 0.25;                                  // +-50% / +-25% of the range
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ---------------------------------------------------------------------------
+// Scene (built once)
+// ---------------------------------------------------------------------------
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x0a1017);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(35, 1, 0.5, 600);
+camera.up.set(0, 0, 1);
+const controls = new THREE.OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.maxPolarAngle = Math.PI * 0.49;
+
+const mat = new THREE.ShaderMaterial({
+  side: THREE.DoubleSide,
+  uniforms: {
+    uA: { value: null }, uB: { value: null }, uMix: { value: 0 }, uMean: { value: null }, uLut: { value: null },
+    uExag: { value: 50 }, uMode: { value: 0 }, uMin: { value: 0 }, uSpan: { value: 1 }, uSqrt: { value: 0 },
+    uAnomKind: { value: 0 }, uAnomRange: { value: 0.5 }, uEps: { value: 1 },
+    uTexel: { value: new THREE.Vector2(1, 1) }, uCell: { value: new THREE.Vector2(1, 1) },
+    uDry: { value: new THREE.Vector3(...DRY.map(v => v / 255)) },
+    uMid: { value: new THREE.Vector3(...MID.map(v => v / 255)) },
+    uWet: { value: new THREE.Vector3(...WET.map(v => v / 255)) },
+  },
+  vertexShader: `
+    precision highp float;
+    uniform sampler2D uA, uB;
+    uniform float uMix, uExag, uMin, uSpan, uSqrt;
+    uniform vec2 uTexel, uCell;
+    attribute float sec;
+    varying float vVal;
+    varying vec2 vUv;
+    varying vec3 vN;
+    float val(vec2 p) {
+      float a = texture2D(uA, p).r, b = texture2D(uB, p).r;
+      return (a < -1.0e29 || b < -1.0e29) ? -1.0e30 : mix(a, b, uMix);
+    }
+    float hgt(float v) {
+      if (v < -1.0e29) return 0.0;
+      float n = max((v - uMin) / uSpan, 0.0);
+      return (uSqrt > 0.5 ? sqrt(n) : n) * uExag * 0.12;
+    }
+    void main() {
+      float v = val(uv);
+      float hE = hgt(val(uv + vec2(uTexel.x, 0.0))), hW = hgt(val(uv - vec2(uTexel.x, 0.0)));
+      float hN = hgt(val(uv - vec2(0.0, uTexel.y))), hS = hgt(val(uv + vec2(0.0, uTexel.y)));
+      vN = normalize(vec3(-(hE - hW) / (2.0 * uCell.x), -(hN - hS) / (2.0 * uCell.y * sec), 1.0));
+      vVal = v; vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, hgt(v), 1.0);
+    }`,
+  fragmentShader: `
+    precision highp float;
+    uniform sampler2D uLut, uMean;
+    uniform float uMode, uMin, uSpan, uSqrt, uAnomKind, uAnomRange, uEps;
+    uniform vec3 uDry, uMid, uWet;
+    varying float vVal;
+    varying vec2 vUv;
+    varying vec3 vN;
+    void main() {
+      if (vVal < -1.0e29) discard;
+      vec3 col;
+      if (uMode < 0.5) {
+        float n = clamp((vVal - uMin) / uSpan, 0.0, 1.0);
+        col = texture2D(uLut, vec2(uSqrt > 0.5 ? sqrt(n) : n, 0.5)).rgb;
+      } else {
+        float m = texture2D(uMean, vUv).r;
+        float d = uAnomKind < 0.5 ? (vVal / max(m, uEps) - 1.0) : (vVal - m);
+        float x = clamp(d / uAnomRange, -1.0, 1.0);
+        col = x < 0.0 ? mix(uMid, uDry, -x) : mix(uMid, uWet, x);
+      }
+      vec3 L = normalize(vec3(-0.55, -0.45, 0.7));
+      float sh = clamp(dot(normalize(vN), L) / L.z, 0.0, 1.8);
+      gl_FragColor = vec4(col * (0.4 + 0.6 * sh), 1.0);
+    }`,
+});
+let mesh = null;
+
+function resize() {
+  renderer.setSize(innerWidth, innerHeight, false);
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); drawChart();
+}
+
+// ---------------------------------------------------------------------------
+// Current dataset
+// ---------------------------------------------------------------------------
+let D = null;     // {meta, frames, texs, nat, ...}  everything for the loaded dataset
+let i0 = 0, i1 = 0;           // active period range (indices into D.frames)
+let exporting = false;
+let NY = 0, t = 0, playing = true, speed = 0.8, last = performance.now();
+let natAvg = 0, lo = 0, hi = 1;
+const slider = $("t");
+
+const mkTex = (data, w, h, fmt = THREE.RedFormat, type = THREE.FloatType, filter = THREE.NearestFilter) => {
+  const tx = new THREE.DataTexture(data, w, h, fmt, type);
+  tx.minFilter = tx.magFilter = filter; tx.generateMipmaps = false; tx.needsUpdate = true;
+  return tx;
+};
+const merc = lat => { lat = Math.max(-85, Math.min(85, lat)); return Math.log(Math.tan(Math.PI / 4 + lat * Math.PI / 360)) * 180 / Math.PI; };
+const num = s => Number(s);
+const fmt = v => {
+  const a = Math.abs(v), d = a >= 100 ? 0 : a >= 10 ? 1 : a >= 1 ? 2 : 3;
+  return v.toLocaleString(undefined, { maximumFractionDigits: d });
+};
+
+function disposeData() {
+  if (!D) return;
+  if (mesh) { scene.remove(mesh); mesh.geometry.dispose(); mesh = null; }
+  D.texs.forEach(x => x.dispose()); D.meanTex.dispose(); D.lutTex.dispose();
+  D = null;
+}
+
+function setData(meta, raw) {
+  disposeData();
+  const { rows, cols, bounds } = meta, N = rows * cols, P = meta.years.length;
+  const [left, bottom, right, top] = bounds;
+  const smin = meta.store_min, k = (meta.store_max - meta.store_min) / 65534;
+
+  const frames = [];
+  for (let p = 0; p < P; p++) {
+    const f = new Float32Array(N);
+    for (let i = 0; i < N; i++) { const q = raw[p * N + i]; f[i] = q === 65535 ? NODATA : smin + q * k; }
+    frames.push(f);
+  }
+  const dxDeg = (right - left) / cols, dyDeg = (top - bottom) / rows;
+
+  // area mean per period (cosine-of-latitude weighted)
+  const wRow = Array.from({ length: rows }, (_, r) => Math.max(Math.cos((top - (r + .5) * dyDeg) * Math.PI / 180), 0.01));
+  const nat = frames.map(f => {
+    let s = 0, w = 0;
+    for (let r = 0; r < rows; r++) for (let c = 0, i = r * cols; c < cols; c++, i++) if (f[i] > NODATA) { s += f[i] * wRow[r]; w += wRow[r]; }
+    return s / w;
+  });
+
+  // palette -> LUT
+  const stops = PALETTES[meta.palette] || PALETTES.viridis, cs = stops.map(s => hex(s[1]));
+  const lut = new Uint8Array(256 * 4);
+  for (let i = 0; i < 256; i++) {
+    const p = i / 255; let j = 1;
+    while (j < stops.length - 1 && p > stops[j][0]) j++;
+    const f = Math.min(1, Math.max(0, (p - stops[j - 1][0]) / (stops[j][0] - stops[j - 1][0])));
+    for (let c = 0; c < 3; c++) lut[i * 4 + c] = cs[j - 1][c] + (cs[j][c] - cs[j - 1][c]) * f;
+    lut[i * 4 + 3] = 255;
+  }
+  const lutTex = mkTex(lut, 256, 1, THREE.RGBAFormat, THREE.UnsignedByteType, THREE.LinearFilter);
+  const meanTex = mkTex(new Float32Array(N).fill(NODATA), cols, rows);
+  const texs = frames.map(f => mkTex(f, cols, rows));
+
+  // geometry: one vertex per cell on a Web-Mercator spread, z = height
+  const yTop = merc(top), yBot = merc(bottom), yC = (yTop + yBot) / 2, lonC = (left + right) / 2;
+  const pos = new Float32Array(N * 3), uv = new Float32Array(N * 2), sec = new Float32Array(N);
+  for (let r = 0; r < rows; r++) {
+    const lat = top - (r + .5) * dyDeg, y = merc(lat) - yC, s = 1 / Math.cos(Math.max(-85, Math.min(85, lat)) * Math.PI / 180);
+    for (let c = 0; c < cols; c++) {
+      const i = r * cols + c;
+      pos[i * 3] = left + (c + .5) * dxDeg - lonC; pos[i * 3 + 1] = y;
+      uv[i * 2] = (c + .5) / cols; uv[i * 2 + 1] = (r + .5) / rows; sec[i] = s;
+    }
+  }
+  const idx = new Uint32Array((rows - 1) * (cols - 1) * 6);
+  for (let r = 0, n = 0; r < rows - 1; r++) for (let c = 0; c < cols - 1; c++) {
+    const a = r * cols + c, b = a + 1, d = a + cols, e = d + 1;
+    idx.set([a, d, b, b, d, e], n); n += 6;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+  geo.setAttribute("sec", new THREE.BufferAttribute(sec, 1));
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  mesh = new THREE.Mesh(geo, mat); mesh.frustumCulled = false; scene.add(mesh);
+
+  // camera framing scales with the extent (the US, 58 deg wide, is the reference)
+  const ext = Math.max(right - left, (yTop - yBot) * 1.7);
+  camera.near = ext * 0.01; camera.far = ext * 20; camera.updateProjectionMatrix();
+  camera.position.set(0, -ext * 1.06, ext * 0.75); controls.target.set(0, 0, 0); controls.update();
+
+  const span = meta.disp_max - meta.disp_min;
+  const u = mat.uniforms;
+  u.uMin.value = meta.disp_min; u.uSpan.value = span; u.uSqrt.value = meta.scale === "sqrt" ? 1 : 0;
+  u.uAnomKind.value = meta.anomaly === "ratio" ? 0 : 1;
+  u.uAnomRange.value = meta.anomaly === "ratio" ? ANOM_RATIO : ANOM_DIFF * span;
+  u.uEps.value = span * 1e-3;
+  u.uTexel.value.set(1 / cols, 1 / rows); u.uCell.value.set(dxDeg, dyDeg);
+  u.uLut.value = lutTex; u.uMean.value = meanTex; u.uMode.value = 0;
+  u.uExag.value = +$("ex").value * ext / 58.5;
+  $("m-abs").setAttribute("aria-pressed", true); $("m-anom").setAttribute("aria-pressed", false);
+
+  D = { meta, frames, texs, nat, lutTex, meanTex, ext, cols, rows, N, uniformExt: ext / 58.5 };
+  $("ttl").textContent = meta.label;
+  const numeric = meta.years.map(num).every(Number.isFinite);
+  for (const id of ["y0", "y1"]) $(id).disabled = !numeric;
+  $("unit").textContent = meta.unit ? `${meta.label} (${meta.unit})` : meta.label;
+  setRange(0, P - 1);
+  drawLegend();
+}
+
+// active sub-range of periods; recomputes the average the "vs average" mode compares against
+function setRange(a, b) {
+  i0 = a; i1 = b; NY = b - a + 1;
+  const { frames, N, meta, nat } = D, mean = D.meanTex.image.data, cnt = new Uint16Array(N);
+  mean.fill(0);
+  for (let p = a; p <= b; p++) { const f = frames[p]; for (let i = 0; i < N; i++) if (f[i] > NODATA) { mean[i] += f[i]; cnt[i]++; } }
+  for (let i = 0; i < N; i++) mean[i] = cnt[i] ? mean[i] / cnt[i] : NODATA;
+  D.meanTex.needsUpdate = true;
+  const sub = nat.slice(a, b + 1);
+  natAvg = sub.reduce((x, y) => x + y) / NY;
+  const mn = Math.min(...sub), mx = Math.max(...sub);
+  lo = mn - (mx - mn) * 0.15; hi = mx;
+  slider.max = NY - 1;
+  $("y0").value = meta.years[a]; $("y1").value = meta.years[b];
+  say(`${meta.years[0]}–${meta.years[meta.years.length - 1]} available in this dataset.`);
+  t = 0; setT(0);
+}
+
+// ---------------------------------------------------------------------------
+// Playback
+// ---------------------------------------------------------------------------
+const ease = f => f * f * (3 - 2 * f);       // smoothstep: hold a beat on each period, then swell to the next
+
+// Label + area-mean text for the current t (HUD and exported frames share this).
+function readout() {
+  const a = Math.floor(t), b = (a + 1) % NY, f = ease(t - a), m = D.meta, u = m.unit ? " " + m.unit : "";
+  const mn = D.nat[i0 + a] + (D.nat[i0 + b] - D.nat[i0 + a]) * f;
+  const base = `${m.years[i0]}–${m.years[i1]} average`, col = mn >= natAvg ? "#7fd0e6" : "#e0a35c";
+  const ratio = m.anomaly === "ratio" && natAvg > 0, d = fmt(Math.abs(mn - natAvg)), sg = mn >= natAvg ? "+" : "−";
+  return {
+    year: m.years[i0 + Math.round(t) % NY], mn,
+    html: ratio ? `Mean <b>${fmt(mn)}</b>${u} &middot; <b style="color:${col}">${Math.round(mn / natAvg * 100)}%</b> of ${base}`
+                : `Mean <b>${fmt(mn)}</b>${u} &middot; <b style="color:${col}">${sg}${d}</b>${u} vs ${base}`,
+    plain: ratio ? `Mean ${fmt(mn)}${u}  ·  ${Math.round(mn / natAvg * 100)}% of ${base}`
+                 : `Mean ${fmt(mn)}${u}  ·  ${sg}${d}${u} vs ${base}`,
+  };
+}
+function setT(v) {
+  if (!D) return;
+  t = ((v % NY) + NY) % NY;                  // wraps: the last period morphs back into the first
+  const a = Math.floor(t), b = (a + 1) % NY, f = ease(t - a);
+  mat.uniforms.uA.value = D.texs[i0 + a]; mat.uniforms.uB.value = D.texs[i0 + b]; mat.uniforms.uMix.value = f;
+  slider.value = Math.min(t, NY - 1);
+  const r = readout();
+  $("yr").textContent = r.year; $("stat").innerHTML = r.html;
+  drawChart();
+}
+$("play").addEventListener("click", () => {
+  playing = !playing; $("play").innerHTML = playing ? "&#10074;&#10074;" : "&#9654;"; last = performance.now();
+});
+slider.addEventListener("input", () => setT(+slider.value));
+$("sp").addEventListener("input", e => { speed = +e.target.value; $("spv").textContent = speed.toFixed(1) + "/s"; });
+$("ex").addEventListener("input", e => {
+  if (D) mat.uniforms.uExag.value = +e.target.value * D.uniformExt;
+  $("exv").innerHTML = e.target.value + "&times;";
+});
+for (const [id, m] of [["m-abs", 0], ["m-anom", 1]]) $(id).addEventListener("click", () => {
+  mat.uniforms.uMode.value = m;
+  $("m-abs").setAttribute("aria-pressed", m === 0); $("m-anom").setAttribute("aria-pressed", m === 1);
+  drawLegend();
+});
+
+// ---------------------------------------------------------------------------
+// Chart + legend
+// ---------------------------------------------------------------------------
+const chart = $("chart"), cx = chart.getContext("2d");
+function drawChart() {
+  if (!D) return;
+  const W = chart.clientWidth, H = chart.clientHeight, dpr = Math.min(devicePixelRatio, 2);
+  if (!W) return;
+  if (chart.width !== Math.round(W * dpr)) { chart.width = Math.round(W * dpr); chart.height = Math.round(H * dpr); }
+  cx.setTransform(dpr, 0, 0, dpr, 0, 0); cx.clearRect(0, 0, W, H);
+  paintChart(cx, 0, 0, W, H);
+}
+// One bar per period, coloured by departure from the average; marker at the current t.
+function paintChart(c2, x0, y0, W, H) {
+  const sub = D.nat.slice(i0, i1 + 1), bw = W / NY, yOf = v => y0 + H - 2 - (v - lo) / (hi - lo || 1) * (H - 6);
+  const rng = (Math.max(...sub) - Math.min(...sub)) || 1;
+  c2.save();
+  sub.forEach((v, i) => {
+    const x = D.meta.anomaly === "ratio" && natAvg > 0 ? (v - natAvg) / natAvg / 0.15 : (v - natAvg) / (rng * 0.6);
+    const k = Math.max(-1, Math.min(1, x));
+    const c = (k < 0 ? DRY : WET).map((d, j) => Math.round(MID[j] + (d - MID[j]) * Math.abs(k)));
+    c2.fillStyle = `rgb(${c})`; c2.globalAlpha = i === Math.round(t) % NY ? 1 : 0.55;
+    c2.fillRect(x0 + i * bw + (bw > 4 ? 1 : 0), yOf(v), Math.max(1, bw - (bw > 4 ? 2 : 0)), y0 + H - 2 - yOf(v));
+  });
+  c2.globalAlpha = 1; c2.strokeStyle = "rgba(216,228,236,.5)"; c2.setLineDash([3, 3]);
+  c2.beginPath(); c2.moveTo(x0, yOf(natAvg)); c2.lineTo(x0 + W, yOf(natAvg)); c2.stroke(); c2.setLineDash([]);
+  const px = x0 + (Math.min(t, NY - 1) + .5) * bw; c2.strokeStyle = "#fff"; c2.lineWidth = 1.5;
+  c2.beginPath(); c2.moveTo(px, y0); c2.lineTo(px, y0 + H); c2.stroke();
+  c2.restore();
+}
+chart.addEventListener("click", e => {
+  const r = chart.getBoundingClientRect(); setT(Math.floor((e.clientX - r.left) / r.width * NY));
+});
+
+function legendSpec() {
+  const m = D.meta, u = m.unit ? " " + m.unit : "", span = m.disp_max - m.disp_min;
+  if (mat.uniforms.uMode.value === 0) {
+    const stops = (PALETTES[m.palette] || PALETTES.viridis).map(([p, c]) => [p, c]);
+    return { stops, caption: m.unit ? `${m.label} (${m.unit})` : m.label,
+      ticks: [0, .25, .5, .75, 1].map(p => [p, fmt(m.disp_min + span * (m.scale === "sqrt" ? p * p : p)) + (p === 1 ? u : "")]) };
+  }
+  const stops = [[0, `rgb(${DRY})`], [.5, `rgb(${MID})`], [1, `rgb(${WET})`]], r = ANOM_DIFF * span;
+  return { stops, caption: `Departure from the ${m.years[i0]}–${m.years[i1]} average`,
+    ticks: m.anomaly === "ratio" ? [[0, "−50%"], [.5, "average"], [1, "+50%"]]
+                                 : [[0, "−" + fmt(r)], [.5, "average"], [1, "+" + fmt(r) + u]] };
+}
+function drawLegend() {
+  if (!D) return;
+  const L = legendSpec(), ticks = $("ticks"); ticks.innerHTML = "";
+  $("bar").style.background = `linear-gradient(90deg, ${L.stops.map(([p, c]) => `${c} ${(p * 100).toFixed(1)}%`)})`;
+  for (const [p, txt] of L.ticks) { const s = document.createElement("span"); s.style.left = p * 100 + "%"; s.textContent = txt; ticks.appendChild(s); }
+}
+
+// ---------------------------------------------------------------------------
+// Loading datasets / ranges / jobs
+// ---------------------------------------------------------------------------
+let index = [], api = false;
+function say(msg, err = false, el = "status") { const s = $(el); s.textContent = msg; s.className = "status" + (err ? " err" : ""); }
+function prog(id, v) { const p = $(id); p.classList.toggle("on", v != null); if (v != null) p.value = v; }
+
+async function loadIndex() {
+  try { index = await (await fetch("pulse_data/index.json", { cache: "no-store" })).json(); } catch { index = []; }
+  $("dsel").innerHTML = index.map(e => `<option value="${e.id}">${e.label} (${e.first}–${e.last})</option>`).join("");
+  if (D) $("dsel").value = D.meta.id;
+}
+async function loadDataset(id) {
+  const [meta, buf] = await Promise.all([
+    fetch(`pulse_data/${id}/meta.json`, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("meta"); return r.json(); }),
+    fetch(`pulse_data/${id}/years.bin`, { cache: "no-store" }).then(r => { if (!r.ok) throw new Error("data"); return r.arrayBuffer(); }),
+  ]);
+  setData(meta, new Uint16Array(buf));
+  $("dsel").value = id;
+}
+
+async function pollJob(job, onUpdate) {
+  for (;;) {
+    const j = await (await fetch(`/api/job?id=${job}`, { cache: "no-store" })).json();
+    onUpdate(j);
+    if (j.state === "done") return j.dataset;
+    if (j.state === "error" || j.error) throw new Error(j.msg || j.error);
+    await sleep(600);
+  }
+}
+async function postJSON(url, body) {
+  const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  const j = await r.json().catch(() => ({})); if (!r.ok || j.error) throw new Error(j.error || `Server error ${r.status}`); return j;
+}
+
+$("go").addEventListener("click", async () => {
+  if (!D) return;
+  const m = D.meta, ys = m.years.map(num), a = Math.round(+$("y0").value), b = Math.round(+$("y1").value);
+  if (!(Number.isFinite(a) && Number.isFinite(b)) || b <= a) return say("Pick a start year before the end year.", true);
+  if (a >= ys[0] && b <= ys[ys.length - 1]) {                        // inside what we have: slice instantly
+    const from = ys.findIndex(y => y >= a), to = ys.length - 1 - [...ys].reverse().findIndex(y => y <= b);
+    if (to - from < 1) return say("That range holds fewer than 2 periods in this dataset.", true);
+    return setRange(from, to);
+  }
+  if (m.source !== "prism") return say(`This dataset only covers ${ys[0]}–${ys[ys.length - 1]}. Upload more years via Data…`, true);
+  if (!api) return say("Other years need the engine: run python serve.py (see Data…).", true);
+  $("go").disabled = true; say(`Fetching PRISM ${a}–${b}…`); prog("prog", 0);
+  try {
+    const { job } = await postJSON(`/api/prism?start=${a}&end=${b}`, {});
+    const id = await pollJob(job, j => { prog("prog", j.pct); say(j.msg); });
+    await loadIndex(); await loadDataset(id);
+  } catch (e) { say(e.message, true); }
+  prog("prog", null); $("go").disabled = false;
+});
+
+// ---------------------------------------------------------------------------
+// Data dialog
+// ---------------------------------------------------------------------------
+const modal = $("modal"); let picked = [];
+const openData = () => { modal.classList.add("on"); loadIndex(); };
+const closeData = () => modal.classList.remove("on");
+$("open-data").addEventListener("click", openData);
+$("close-data").addEventListener("click", closeData);
+modal.addEventListener("click", e => { if (e.target === modal) closeData(); });
+addEventListener("keydown", e => { if (e.key === "Escape") closeData(); });
+$("dload").addEventListener("click", async () => {
+  try { await loadDataset($("dsel").value); closeData(); } catch { say("Could not load that dataset.", true, "u-status"); }
+});
+
+function setPicked(list) {
+  picked = [...list];
+  const size = picked.reduce((s, f) => s + f.size, 0);
+  $("flist").textContent = picked.length ? `${picked.length} file${picked.length > 1 ? "s" : ""}, ${(size / 1e6).toFixed(1)} MB: ` +
+    picked.slice(0, 6).map(f => f.name).join(", ") + (picked.length > 6 ? ", …" : "") : "";
+  $("u-go").disabled = !picked.length;
+  if (picked.length && !$("u-name").value) $("u-name").value = picked[0].name.replace(/[_-]?\d{4}.*$/, "").replace(/\.[^.]+$/, "").replace(/[_-]+/g, " ").trim();
+}
+$("pick").addEventListener("click", e => { e.preventDefault(); $("files").click(); });
+$("files").addEventListener("change", e => setPicked(e.target.files));
+const drop = $("drop");
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("over"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("over"));
+drop.addEventListener("drop", e => { e.preventDefault(); drop.classList.remove("over"); setPicked(e.dataTransfer.files); });
+
+function upload(file, job, onBytes) {            // XHR gives upload progress; fetch doesn't
+  return new Promise((resolve, reject) => {
+    const x = new XMLHttpRequest();
+    x.open("POST", `/api/upload?job=${job}&name=${encodeURIComponent(file.name)}`);
+    x.upload.onprogress = e => onBytes(e.loaded);
+    x.onload = () => { let j = {}; try { j = JSON.parse(x.responseText); } catch {} x.status < 300 && !j.error ? resolve(j.job) : reject(new Error(j.error || `Upload failed (${x.status})`)); };
+    x.onerror = () => reject(new Error("Upload failed: is python serve.py running?"));
+    x.send(file);
+  });
+}
+$("u-go").addEventListener("click", async () => {
+  const btn = $("u-go"); btn.disabled = true;
+  const total = picked.reduce((s, f) => s + f.size, 0) || 1; let done = 0, job = "new";
+  try {
+    for (const f of picked) {
+      say(`Uploading ${f.name}…`, false, "u-status");
+      job = await upload(f, job, b => prog("u-prog", (done + b) / total * 0.5));
+      done += f.size;
+    }
+    await postJSON("/api/process", {
+      job, label: $("u-name").value || "My dataset", unit: $("u-unit").value, palette: $("u-pal").value,
+      scale: $("u-scale").value, anomaly: $("u-anom").value, credit: $("u-credit").value, clip: $("u-clip").checked, start_label: +$("u-start").value || 1,
+    });
+    const id = await pollJob(job, j => { prog("u-prog", 0.5 + j.pct * 0.5); say(j.msg, false, "u-status"); });
+    await loadIndex(); await loadDataset(id); closeData(); setPicked([]); $("u-name").value = "";
+  } catch (e) { say(e.message, true, "u-status"); }
+  prog("u-prog", null); btn.disabled = !picked.length;
+});
+
+// ---------------------------------------------------------------------------
+// Export: yearly PNG maps (zip) and an animated GIF, composed with title, layers, legend, source
+// ---------------------------------------------------------------------------
+const GIFENC = "https://cdn.jsdelivr.net/npm/gifenc@1.0.3/dist/gifenc.esm.js";
+const PRISM_CREDIT = "PRISM Climate Group, Oregon State University, https://prism.oregonstate.edu (annual precipitation, 4 km grid, averaged to ~8 km)";
+const creditOf = m => m.credit || (m.source === "prism" ? PRISM_CREDIT : "User-supplied data, processed with the Rain pulse engine");
+const PALETTE_NAMES = { rain: "rain (brown to blue)", heat: "heat (blue to red)", viridis: "viridis", blues: "blues" };
+const FONT = '"Segoe UI", "Avenir Next", system-ui, sans-serif';
+const xmodal = $("xmodal"); let xCancel = false, xFor = null;
+const xsay = (m, err = false) => say(m, err, "x-status");
+const fileSlug = s => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "rain-pulse";
+
+function openExport() {
+  if (!D) return;
+  if (xFor !== D.meta.id) { $("x-title").value = D.meta.label; $("x-source").value = creditOf(D.meta); xFor = D.meta.id; }
+  xsay(""); xmodal.classList.add("on");
+}
+function closeExport() { xCancel = true; xmodal.classList.remove("on"); }
+$("open-export").addEventListener("click", openExport);
+$("close-export").addEventListener("click", closeExport);
+xmodal.addEventListener("click", e => { if (e.target === xmodal) closeExport(); });
+addEventListener("keydown", e => { if (e.key === "Escape") xmodal.classList.remove("on"); });
+
+// wrap text into at most maxLines lines; returns the y after the last line
+function wrapText(c2, text, x, y, maxW, lineH, maxLines) {
+  const words = text.split(/\s+/); let line = "", n = 0;
+  for (let i = 0; i < words.length; i++) {
+    const test = line ? line + " " + words[i] : words[i];
+    if (c2.measureText(test).width > maxW && line) {
+      if (++n >= maxLines) { c2.fillText(line.replace(/\s*\S*$/, "") + "…", x, y); return y + lineH; }
+      c2.fillText(line, x, y); y += lineH; line = words[i];
+    } else line = test;
+  }
+  c2.fillText(line, x, y); return y + lineH;
+}
+
+let xSize = "";
+// Draw one finished frame (state already set via setT) onto ctx: header, 3D map, footer.
+function compose(c2, W, H, o) {
+  const s = W / 1400, pad = Math.round(28 * s), hh = Math.round(96 * s), fh = Math.round(176 * s), mh = H - hh - fh;
+  const m = D.meta, ro = readout(), u = m.unit ? " " + m.unit : "";
+  if (xSize !== `${W}x${mh}`) {
+    renderer.setPixelRatio(1); renderer.setSize(W, mh, false);
+    camera.aspect = W / mh; camera.zoom = +$("x-zoom").value; camera.updateProjectionMatrix(); xSize = `${W}x${mh}`;
+  }
+  renderer.render(scene, camera);
+  c2.fillStyle = "#0a1017"; c2.fillRect(0, 0, W, H);
+  c2.drawImage(canvas, 0, hh, W, mh);
+
+  // header
+  c2.textBaseline = "alphabetic"; c2.fillStyle = "#d8e4ec"; c2.textAlign = "left";
+  let fs = 30 * s; c2.font = `600 ${fs}px ${FONT}`;
+  while (c2.measureText(o.title).width > W * 0.64 && fs > 14 * s) { fs -= 1; c2.font = `600 ${fs}px ${FONT}`; }
+  c2.fillText(o.title, pad, hh * 0.5);
+  c2.fillStyle = "#8aa0b0"; c2.font = `${13.5 * s}px ${FONT}`;
+  c2.fillText(`${m.years[i0]}–${m.years[i1]}  ·  each year’s value drawn as terrain height`, pad, hh * 0.5 + 24 * s);
+  c2.textAlign = "right"; c2.fillStyle = "#d8e4ec"; c2.font = `600 ${56 * s}px ${FONT}`;
+  c2.fillText(String(ro.year), W - pad, hh * 0.62);
+  c2.fillStyle = "#8aa0b0"; c2.font = `${12.5 * s}px ${FONT}`;
+  c2.fillText(ro.plain, W - pad, hh * 0.62 + 22 * s);
+  c2.fillStyle = "rgba(190,215,230,.16)"; c2.fillRect(0, hh - 1, W, 1); c2.fillRect(0, hh + mh, W, 1);
+
+  // footer: legend (left), chart (right)
+  const fy = hh + mh + 14 * s, L = legendSpec(), lw = W * 0.36;
+  c2.textAlign = "left"; c2.fillStyle = "#8aa0b0"; c2.font = `${11.5 * s}px ${FONT}`;
+  c2.fillText(L.caption, pad, fy + 10 * s);
+  const g = c2.createLinearGradient(pad, 0, pad + lw, 0);
+  for (const [p, col] of L.stops) g.addColorStop(p, col);
+  c2.fillStyle = g; c2.fillRect(pad, fy + 18 * s, lw, 12 * s);
+  c2.fillStyle = "#8aa0b0"; c2.font = `${11 * s}px ${FONT}`;
+  L.ticks.forEach(([p, txt], i) => {
+    c2.textAlign = i === 0 ? "left" : i === L.ticks.length - 1 ? "right" : "center";
+    c2.fillText(txt, pad + p * lw, fy + 46 * s);
+  });
+  if (o.chart) {
+    const cxp = W * 0.46, cw = W - pad - cxp, chh = 44 * s;
+    c2.textAlign = "left"; c2.fillStyle = "#8aa0b0"; c2.font = `${11.5 * s}px ${FONT}`;
+    c2.fillText(`Area mean by year (dashed = ${m.years[i0]}–${m.years[i1]} average)`, cxp, fy + 10 * s);
+    paintChart(c2, cxp, fy + 16 * s, cw, chh);
+  }
+
+  // footer: layers + source
+  c2.textAlign = "left"; c2.font = `${11.5 * s}px ${FONT}`; const lh = 15.5 * s; let y = fy + 80 * s;
+  const exag = +$("ex").value, pal = PALETTE_NAMES[m.palette] || m.palette;
+  const layers = `Layers: terrain height = ${m.label}${u ? " (" + m.unit + ")" : ""}, ${m.scale === "sqrt" ? "square-root scaled" : "linear"}, ${exag}× vertical exaggeration. ` +
+    (mat.uniforms.uMode.value === 0 ? `Colour = value, ${pal} palette, ${fmt(m.disp_min)}–${fmt(m.disp_max)}${u}.`
+                                    : "Colour = departure from the period average.");
+  c2.fillStyle = "#b8c8d4"; y = wrapText(c2, layers, pad, y, W - 2 * pad, lh, 2);
+  c2.fillStyle = "#8aa0b0"; y = wrapText(c2, "Source: " + o.source, pad, y + 2 * s, W - 2 * pad, lh, 2);
+  c2.textAlign = "right"; c2.font = `${10.5 * s}px ${FONT}`; c2.fillStyle = "rgba(138,160,176,.7)";
+  c2.fillText(`Rain pulse · ${new Date().toISOString().slice(0, 10)}`, W - pad, H - 10 * s);
+}
+
+// minimal "store" zip writer (PNGs are already compressed)
+const CRC = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = b => { let c = ~0; for (let i = 0; i < b.length; i++) c = CRC[(c ^ b[i]) & 255] ^ (c >>> 8); return ~c >>> 0; };
+function makeZip(files) {
+  const enc = new TextEncoder(), parts = [], cd = []; let off = 0;
+  const d = new Date(), dt = ((d.getFullYear() - 1980) << 9) | ((d.getMonth() + 1) << 5) | d.getDate(),
+        tm = (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1);
+  for (const f of files) {
+    const nm = enc.encode(f.name), crc = crc32(f.data), n = f.data.length;
+    const h = new DataView(new ArrayBuffer(30));
+    h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+    h.setUint16(10, tm, true); h.setUint16(12, dt, true); h.setUint32(14, crc, true); h.setUint32(18, n, true);
+    h.setUint32(22, n, true); h.setUint16(26, nm.length, true); h.setUint16(28, 0, true);
+    parts.push(new Uint8Array(h.buffer), nm, f.data);
+    const c = new DataView(new ArrayBuffer(46));
+    c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true);
+    c.setUint16(10, 0, true); c.setUint16(12, tm, true); c.setUint16(14, dt, true); c.setUint32(16, crc, true);
+    c.setUint32(20, n, true); c.setUint32(24, n, true); c.setUint16(28, nm.length, true); c.setUint32(42, off, true);
+    cd.push(new Uint8Array(c.buffer), nm); off += 30 + nm.length + n;
+  }
+  const e = new DataView(new ArrayBuffer(22));
+  e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true);
+  e.setUint32(12, cd.reduce((s, p) => s + p.length, 0), true); e.setUint32(16, off, true);
+  return new Blob([...parts, ...cd, new Uint8Array(e.buffer)], { type: "application/zip" });
+}
+function download(blob, name) {
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 30000);
+}
+const toBlob = c => new Promise(r => c.toBlob(r, "image/png"));
+const frameH = W => Math.round(W * 0.72);
+
+async function runExport(kind) {                        // kind: "current" | "run"
+  if (!D || exporting) return;
+  const wantGif = $("x-gif").checked, wantPng = $("x-png").checked;
+  if (kind === "run" && !wantGif && !wantPng) return xsay("Choose at least one format.", true);
+  const o = { title: $("x-title").value.trim() || D.meta.label, source: $("x-source").value.trim() || creditOf(D.meta), chart: $("x-chart").checked };
+  const slug = fileSlug(o.title), wasPlaying = playing, savedT = t;
+  exporting = true; xCancel = false; playing = false; xSize = "";
+  $("x-run").disabled = $("x-one").disabled = true; $("x-cancel").style.display = "";
+  const out = document.createElement("canvas"), c2 = out.getContext("2d", { willReadFrequently: true });
+  const size = W => { out.width = W; out.height = frameH(W); };
+  try {
+    if (kind === "current") {
+      const W = +$("x-psize").value; size(W); setT(savedT); compose(c2, W, out.height, o);
+      download(await toBlob(out), `${slug}_${readout().year}.png`); xsay("Saved current frame.");
+    } else {
+      if (wantPng) {
+        const W = +$("x-psize").value, files = []; size(W);
+        for (let p = 0; p < NY; p++) {
+          if (xCancel) throw new Error("Export cancelled.");
+          setT(p); compose(c2, W, out.height, o);
+          files.push({ name: `${slug}_${D.meta.years[i0 + p]}.png`, data: new Uint8Array(await (await toBlob(out)).arrayBuffer()) });
+          prog("x-prog", (p + 1) / NY * (wantGif ? 0.4 : 1)); xsay(`PNG maps ${p + 1}/${NY}`); await sleep(0);
+        }
+        download(makeZip(files), `${slug}_${D.meta.years[i0]}-${D.meta.years[i1]}_maps.zip`);
+      }
+      if (wantGif) {
+        xsay("Loading GIF encoder…");
+        const { GIFEncoder, quantize, applyPalette } = await import(GIFENC);
+        const W = +$("x-gsize").value, steps = +$("x-steps").value, hold = +$("x-hold").value, base = wantPng ? 0.4 : 0;
+        size(W); const gif = GIFEncoder(), total = NY * steps;
+        for (let p = 0, n = 0; p < NY; p++) for (let k = 0; k < steps; k++, n++) {
+          if (xCancel) throw new Error("Export cancelled.");
+          setT(p + k / steps); compose(c2, W, out.height, o);        // p = NY-1 morphs back to the first year: seamless loop
+          const px = c2.getImageData(0, 0, W, out.height).data, pal = quantize(px, 256, { format: "rgb444" });
+          gif.writeFrame(applyPalette(px, pal, "rgb444"), W, out.height, { palette: pal, delay: k === 0 ? hold : 70 });
+          prog("x-prog", base + (n + 1) / total * (1 - base)); xsay(`GIF frame ${n + 1}/${total}`);
+          if (n % 3 === 2) await sleep(0);
+        }
+        gif.finish();
+        download(new Blob([gif.bytes()], { type: "image/gif" }), `${slug}_${D.meta.years[i0]}-${D.meta.years[i1]}.gif`);
+      }
+      xsay("Done. Your downloads should have started.");
+    }
+  } catch (e) { xsay(e.message || String(e), true); }
+  exporting = false; playing = wasPlaying; last = performance.now(); xSize = "";
+  $("x-run").disabled = $("x-one").disabled = false; $("x-cancel").style.display = "none"; prog("x-prog", null);
+  camera.zoom = 1; renderer.setPixelRatio(Math.min(devicePixelRatio, 2)); resize(); setT(savedT);
+}
+$("x-run").addEventListener("click", () => runExport("run"));
+$("x-one").addEventListener("click", () => runExport("current"));
+$("x-cancel").addEventListener("click", () => { xCancel = true; });
+
+// ---------------------------------------------------------------------------
+// Hide / show controls, boot
+// ---------------------------------------------------------------------------
+const setOff = off => document.body.classList.toggle("off", off);
+$("hide").addEventListener("click", () => setOff(true));
+$("show").addEventListener("click", () => setOff(false));
+addEventListener("keydown", ev => {
+  if (ev.key.toLowerCase() === "h" && !ev.ctrlKey && !ev.metaKey && !/INPUT|TEXTAREA|SELECT/.test(ev.target.tagName))
+    setOff(!document.body.classList.contains("off"));
+});
+addEventListener("resize", resize);
+
+(async function boot() {
+  try {
+    await loadIndex();
+    if (!index.length) throw new Error("no datasets");
+    // upload engine available? (python serve.py answers /api/job with JSON; http.server answers HTML)
+    api = await fetch("/api/job?id=probe").then(r => (r.headers.get("content-type") || "").includes("json")).catch(() => false);
+    document.body.classList.toggle("noapi", !api);
+    await loadDataset(index[0].id);
+  } catch { $("err").style.display = "grid"; return; }
+  resize();
+  $("hud").hidden = false; $("panel").hidden = false;
+  (function frame(now) {
+    if (!exporting) {
+      if (playing && D) setT(t + (now - last) / 1000 * speed);
+      controls.update(); renderer.render(scene, camera);
+    }
+    last = now;
+    requestAnimationFrame(frame);
+  })(performance.now());
+})();
+</script>
+</body>
+</html>
