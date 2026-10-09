@@ -1,0 +1,5 @@
+variable,weighted_mean,weighted_median,unweighted_mean,unweighted_median
+Diameter at breast height (DIA),4.280408972110495,2.7,9.032159565151437,7.4
+Total height (HT),30.10845477895534,23.0,50.52627158393985,48.0
+Aboveground + belowground dry biomass,256.3053465583911,21.342266474859123,1044.1479704110775,278.98643300000003
+Net merchantable volume (VOLCFNET),16.791868490592698,6.673366115704639,25.08854572033413,7.031325
