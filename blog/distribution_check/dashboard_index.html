@@ -1,0 +1,540 @@
+<style>
+#dash-root { --dash-gutter: clamp(16px, 4vw, 32px); }
+.dq-wrap {
+  max-width: 1180px; margin-inline: auto;
+  font-family: Arial, Helvetica, sans-serif;
+  --dq-accent: #2f6b45;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .dq-wrap { --dq-accent: #5fae81; } }
+:root[data-theme="dark"] .dq-wrap { --dq-accent: #5fae81; }
+.dq-wrap, .dq-wrap * { font-family: Arial, Helvetica, sans-serif; }
+.dq-header {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  gap: var(--cds-gap-sm) var(--cds-gap-lg); margin-bottom: var(--cds-gap-lg);
+}
+.dq-title { font-weight: 700; font-size: var(--cds-font-size-title); margin: 0; flex: 0 0 auto; }
+.dq-takeaway { font-size: var(--cds-font-size-body); color: var(--color-fg-muted); margin: 0; flex: 1 1 320px; min-width: 0; }
+.dq-takeaway b { font-weight: 700; color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.dq-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr)); gap: var(--cds-gap-md); margin: var(--cds-gap-lg) 0; }
+.dq-kpi { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); }
+.dq-kpi-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); text-transform: uppercase; letter-spacing: .04em; }
+.dq-kpi-value { font-weight: 700; font-size: var(--cds-font-size-title); font-variant-numeric: tabular-nums; margin-top: 4px; }
+.dq-controls { display: flex; align-items: flex-end; gap: var(--cds-gap-lg); margin-bottom: var(--cds-gap-sm); flex-wrap: wrap; }
+.dq-control-group { display: flex; flex-direction: column; gap: 4px; }
+.dq-controls-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dq-controls-label b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.dq-select { font: inherit; font-size: var(--cds-font-size-caption); background: var(--color-panel); color: var(--color-fg); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: 6px 10px; min-width: 10rem; }
+.dq-slider { width: 10rem; accent-color: var(--dq-accent); }
+.dq-seg { display: inline-flex; border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); overflow: hidden; }
+.dq-seg button { font: inherit; font-size: var(--cds-font-size-caption); background: var(--color-panel); color: var(--color-fg-muted); border: 0; padding: 6px 14px; cursor: pointer; }
+.dq-seg button.active { background: var(--dq-accent); color: #fff; }
+.dq-scope-note { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin: 0 0 var(--cds-gap-lg); }
+.dq-scope-note b { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.dq-scatter-controls { display: flex; gap: var(--cds-gap-lg); margin-bottom: var(--cds-gap-sm); flex-wrap: wrap; }
+.dq-scatter-controls label { display: flex; align-items: center; gap: 8px; font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dq-dot { fill: var(--dq-accent); fill-opacity: .35; }
+.dq-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr)); gap: var(--cds-gap-md); margin-bottom: var(--cds-gap-lg); }
+.dq-card { background: var(--color-panel); border: 1px solid var(--color-border-line); border-radius: var(--cds-radius); padding: var(--cds-pad-lg); }
+.dq-card-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--cds-gap-sm); }
+.dq-card-title { font-size: var(--cds-font-size-heading); font-weight: var(--cds-font-weight-medium); }
+.dq-card-unit { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); }
+.dq-mini-label { font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); margin-bottom: 2px; display: flex; justify-content: space-between; }
+.dq-mini-label .dq-stat { color: var(--color-fg); font-variant-numeric: tabular-nums; }
+.dq-chart-box { position: relative; min-height: 120px; margin-bottom: var(--cds-gap-sm); }
+.dq-chart-box:last-child { margin-bottom: 0; }
+.dq-chart-box svg { width: 100%; display: block; overflow: visible; }
+.dq-axis text { fill: var(--color-fg-muted); font-size: 10px; }
+.dq-axis path, .dq-axis line { stroke: var(--cds-chart-axis); }
+.dq-bar { fill: var(--dq-bar-color, var(--cds-chart-muted)); }
+.dq-refline { stroke: var(--cds-chart-reference); stroke-width: 1; stroke-dasharray: 3 3; }
+.dq-tip { position: absolute; pointer-events: none; background: var(--cds-surface-popover); border: 1px solid var(--cds-border); border-radius: var(--cds-radius); box-shadow: var(--cds-shadow-popover); padding: var(--cds-pad-xs) var(--cds-pad-sm); font-size: var(--cds-font-size-caption); opacity: 0; transition: opacity .1s; white-space: nowrap; z-index: 2; }
+.dq-table-wrap { overflow-x: auto; }
+table.dq-table { width: 100%; border-collapse: collapse; font-size: var(--cds-font-size-body); }
+table.dq-table th, table.dq-table td { text-align: right; padding: var(--cds-pad-sm); border-bottom: 1px solid var(--color-border-line); font-variant-numeric: tabular-nums; }
+table.dq-table th:first-child, table.dq-table td:first-child { text-align: left; font-variant-numeric: normal; }
+table.dq-table th { color: var(--color-fg-muted); font-weight: var(--cds-font-weight-medium); font-size: var(--cds-font-size-caption); }
+.dq-foot { display: flex; flex-wrap: wrap; gap: var(--cds-gap-lg); font-size: var(--cds-font-size-caption); color: var(--color-fg-muted); line-height: 1.6; }
+.dq-foot-col { flex: 1 1 280px; min-width: 0; }
+.dq-foot p { margin: 0; }
+.dq-foot em { font-style: italic; color: var(--color-fg); }
+.dq-skel { background: var(--cds-chart-muted); opacity: .25; border-radius: var(--cds-radius); }
+[data-dash-source-state="refreshing"] { opacity: .5; transition: opacity var(--cds-dur-slow); }
+@media (max-width: 640px) { .dq-grid { grid-template-columns: 1fr; } }
+</style>
+
+<div class="dq-wrap">
+  <div class="dq-header">
+    <h1 class="dq-title">FIA Tree Measurement Distributions</h1>
+    <p class="dq-takeaway">
+      Weighting each sampled tree by the acreage it represents changes the picture: the typical diameter
+      drops from a measured median of <b><span data-source="stats" data-field="median" data-where="variable=DIA">&mdash;</span> in</b>
+      (the raw sample) to a population-weighted <b><span data-source="stats" data-field="weighted_median" data-where="variable=DIA">&mdash;</span> in</b>,
+      because FIA samples small trees on a smaller plot than large ones.
+    </p>
+  </div>
+
+  <div class="dq-kpis">
+    <div class="dq-kpi">
+      <div class="dq-kpi-label">Trees sampled</div>
+      <div class="dq-kpi-value" data-source="summary" data-field="n_trees" data-row="0">&mdash;</div>
+    </div>
+    <div class="dq-kpi">
+      <div class="dq-kpi-label">Forest plots</div>
+      <div class="dq-kpi-value" data-source="summary" data-field="n_plots" data-row="0">&mdash;</div>
+    </div>
+    <div class="dq-kpi">
+      <div class="dq-kpi-label">Scope</div>
+      <div class="dq-kpi-value" style="font-size:var(--cds-font-size-heading)">Live trees, latest evaluation</div>
+    </div>
+  </div>
+
+  <div class="dq-controls">
+    <div class="dq-control-group">
+      <span class="dq-controls-label">Region</span>
+      <select id="dq-region-select" class="dq-select"></select>
+    </div>
+    <div class="dq-control-group">
+      <span class="dq-controls-label">State</span>
+      <select id="dq-state-select" class="dq-select"></select>
+    </div>
+    <div class="dq-control-group">
+      <span class="dq-controls-label">Bins: <b id="dq-bin-readout">30</b></span>
+      <input type="range" id="dq-bin-slider" class="dq-slider" min="8" max="100" step="1" value="30">
+    </div>
+    <div class="dq-control-group">
+      <span class="dq-controls-label">Axis scale</span>
+      <div class="dq-seg" id="dq-scale-toggle">
+        <button data-scale="linear" class="active">Linear (trimmed)</button>
+        <button data-scale="log">Log (full range)</button>
+      </div>
+    </div>
+  </div>
+  <p class="dq-scope-note" id="dq-scope-note" data-source="sample">&mdash;</p>
+
+  <div class="dq-grid" id="dq-charts"></div>
+
+  <div class="dq-card" style="margin-bottom: var(--cds-gap-lg)" data-source="sample">
+    <div class="dq-card-head">
+      <span class="dq-card-title">Scatter: two variables at once</span>
+    </div>
+    <div class="dq-scatter-controls">
+      <label>X axis <select id="dq-scatter-x" class="dq-select"></select></label>
+      <label>Y axis <select id="dq-scatter-y" class="dq-select"></select></label>
+    </div>
+    <div class="dq-chart-box" id="dq-scatter-box" style="min-height: 380px">
+      <svg></svg>
+    </div>
+  </div>
+
+  <div class="dq-card" style="margin-bottom: var(--cds-gap-lg)">
+    <div class="dq-card-head">
+      <span class="dq-card-title">Raw sample vs. TPA-weighted, side by side</span>
+      <span class="dq-card-unit">National, full data</span>
+    </div>
+    <div class="dq-table-wrap">
+      <table class="dq-table" data-source="stats" data-row-key="variable">
+        <thead>
+          <tr>
+            <th data-field="variable">Variable</th>
+            <th data-field="median">Raw median</th>
+            <th data-field="weighted_median">Weighted median</th>
+            <th data-field="mean">Raw mean</th>
+            <th data-field="weighted_mean">Weighted mean</th>
+            <th data-field="n_missing">Missing</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="dq-foot">
+    <div class="dq-foot-col">
+      <p><b>Scope.</b> Live trees (STATUSCD = 1) on each state's latest FIA evaluation. Diameter and height are
+      the raw field measurements; biomass is aboveground + belowground dry weight; volume is net merchantable
+      cubic-foot volume. None of these are expanded to a per-acre total here &mdash; the "weighted" view corrects
+      the <em>shape</em> of the distribution for FIA's sampling design, it is not a population total.</p>
+    </div>
+    <div class="dq-foot-col">
+      <p><b>Why two views.</b> FIA measures trees under 5 inches diameter on a smaller microplot and trees 5
+      inches and up on the full subplot. A raw tree count is pulled from a bigger search area once a tree
+      crosses that threshold, which shows up as an artificial dip-then-spike right at 5 inches in the raw
+      sample. Weighting each tree by trees-per-acre (TPA &times; the microplot/subplot adjustment factor)
+      removes that artifact and shows the smooth, steadily declining size distribution of a natural,
+      uneven-aged forest.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const VARS = [
+    { id: 'DIA', key: 'd', label: 'Diameter at breast height', short: 'Diameter', unit: 'inches' },
+    { id: 'HT', key: 'h', label: 'Total height', short: 'Height', unit: 'feet' },
+    { id: 'Biomass', key: 'b', label: 'Aboveground + belowground dry biomass', short: 'Biomass', unit: 'pounds' },
+    { id: 'Volume', key: 'v', label: 'Net merchantable volume', short: 'Volume', unit: 'cubic feet' },
+  ];
+  const VAR_BY_KEY = Object.fromEntries(VARS.map(v => [v.key, v]));
+  const fmt = d3.format(',.1~f');
+  const fmtInt = d3.format(',');
+
+  let scaleMode = 'linear'; // 'linear' | 'log'
+  let nBins = 30;
+  let regionSel = 'all';
+  let stateSel = 'all';
+  let scatterX = 'd';
+  let scatterY = 'h';
+  let statesRows = [];
+  let regionOptionsBuilt = false;
+
+  const grid = document.getElementById('dq-charts');
+  VARS.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'dq-card';
+    card.dataset.var = v.id;
+    card.innerHTML = `
+      <div class="dq-card-head">
+        <span class="dq-card-title">${v.short}</span>
+        <span class="dq-card-unit">${v.unit}</span>
+      </div>
+      <div class="dq-mini-label">
+        <span>Raw sample (trees measured)</span>
+        <span class="dq-stat" data-kind="raw-stat">&mdash;</span>
+      </div>
+      <div class="dq-chart-box" data-kind="raw" data-source="sample"><svg></svg></div>
+      <div class="dq-mini-label">
+        <span>Weighted by trees/acre (population shape)</span>
+        <span class="dq-stat" data-kind="weighted-stat">&mdash;</span>
+      </div>
+      <div class="dq-chart-box" data-kind="weighted" data-source="sample"><svg></svg></div>
+    `;
+    grid.appendChild(card);
+  });
+
+  document.getElementById('dq-scale-toggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    scaleMode = btn.dataset.scale;
+    [...btn.parentElement.children].forEach(b => b.classList.toggle('active', b === btn));
+    render();
+  });
+
+  const binSlider = document.getElementById('dq-bin-slider');
+  const binReadout = document.getElementById('dq-bin-readout');
+  binSlider.addEventListener('input', () => {
+    nBins = +binSlider.value;
+    binReadout.textContent = nBins;
+    render();
+  });
+
+  const regionSelect = document.getElementById('dq-region-select');
+  const stateSelect = document.getElementById('dq-state-select');
+
+  function populateStates() {
+    const opts = regionSel === 'all' ? statesRows : statesRows.filter(r => r.region === regionSel);
+    const sorted = opts.slice().sort((a, b) => a.name.localeCompare(b.name));
+    stateSelect.innerHTML = '<option value="all">All states</option>' +
+      sorted.map(r => `<option value="${r.statecd}">${r.name}</option>`).join('');
+    stateSelect.value = stateSel;
+  }
+
+  function buildFilterOptions() {
+    if (regionOptionsBuilt || !statesRows.length) return;
+    const regions = Array.from(new Set(statesRows.map(r => r.region))).sort();
+    regionSelect.innerHTML = '<option value="all">All regions</option>' +
+      regions.map(r => `<option value="${r}">${r}</option>`).join('');
+    regionSelect.addEventListener('change', () => {
+      regionSel = regionSelect.value;
+      stateSel = 'all';
+      populateStates();
+      render();
+    });
+    stateSelect.addEventListener('change', () => {
+      stateSel = stateSelect.value;
+      render();
+    });
+    populateStates();
+    regionOptionsBuilt = true;
+  }
+
+  const scatterXSel = document.getElementById('dq-scatter-x');
+  const scatterYSel = document.getElementById('dq-scatter-y');
+  (function buildScatterOptions() {
+    const opts = VARS.map(v => `<option value="${v.key}">${v.short} (${v.unit})</option>`).join('');
+    scatterXSel.innerHTML = opts; scatterYSel.innerHTML = opts;
+    scatterXSel.value = scatterX; scatterYSel.value = scatterY;
+    scatterXSel.addEventListener('change', () => { scatterX = scatterXSel.value; render(); });
+    scatterYSel.addEventListener('change', () => { scatterY = scatterYSel.value; render(); });
+  })();
+
+  function quantile(sortedArr, q) {
+    if (!sortedArr.length) return NaN;
+    const pos = (sortedArr.length - 1) * q;
+    const lo = Math.floor(pos), hi = Math.ceil(pos);
+    if (lo === hi) return sortedArr[lo];
+    return sortedArr[lo] + (sortedArr[hi] - sortedArr[lo]) * (pos - lo);
+  }
+
+  function weightedQuantile(values, weights, q) {
+    if (!values.length) return NaN;
+    const idx = values.map((_, i) => i).sort((a, b) => values[a] - values[b]);
+    const vs = idx.map(i => values[i]), ws = idx.map(i => weights[i] || 0);
+    const total = d3.sum(ws);
+    if (!total) return vs[Math.floor(vs.length / 2)];
+    let cum = 0;
+    const cw = ws.map(w => { cum += w; return cum - 0.5 * w; });
+    const target = q * total;
+    for (let i = 0; i < cw.length; i++) if (cw[i] >= target) return vs[i];
+    return vs[vs.length - 1];
+  }
+
+  function computeBins(values, weights, isLog, bins) {
+    if (!values.length) return null;
+    let lo, hi;
+    if (isLog) {
+      const pos = values.filter(v => v > 0);
+      if (!pos.length) return null;
+      lo = d3.min(pos); hi = d3.max(pos);
+    } else {
+      const sorted = values.slice().sort((a, b) => a - b);
+      lo = sorted[0];
+      hi = quantile(sorted, 0.995);
+      if (hi <= lo) hi = sorted[sorted.length - 1];
+    }
+    if (hi <= lo) hi = lo + 1;
+    const logLo = isLog ? Math.log10(lo) : 0, logHi = isLog ? Math.log10(hi) : 0;
+    const span = isLog ? (logHi - logLo) : (hi - lo);
+    const edges = new Array(bins + 1);
+    for (let i = 0; i <= bins; i++) {
+      edges[i] = isLog ? Math.pow(10, logLo + span * i / bins) : lo + span * i / bins;
+    }
+    const raw = new Array(bins).fill(0);
+    const weighted = new Array(bins).fill(0);
+    for (let i = 0; i < values.length; i++) {
+      const val = values[i];
+      if (val < lo || val > hi) continue;
+      if (isLog && val <= 0) continue;
+      let bi = span > 0 ? Math.floor(((isLog ? Math.log10(val) : val) - (isLog ? logLo : lo)) / span * bins) : 0;
+      if (bi >= bins) bi = bins - 1;
+      if (bi < 0) bi = 0;
+      raw[bi] += 1;
+      weighted[bi] += weights[i] || 0;
+    }
+    const rows = [];
+    for (let i = 0; i < bins; i++) rows.push({ bin_lo: edges[i], bin_hi: edges[i + 1], raw: raw[i], weighted: weighted[i] });
+    return rows;
+  }
+
+  function drawMiniChart(svgEl, rows, countKey, { unit, yLabel, color, medianValue }) {
+    const box = svgEl.closest('.dq-chart-box');
+    const width = box.clientWidth || 280;
+    const height = 120;
+    const margin = { top: 4, right: 10, bottom: 18, left: 38 };
+    const innerW = Math.max(10, width - margin.left - margin.right);
+    const innerH = height - margin.top - margin.bottom;
+
+    svgEl.innerHTML = '';
+    const svg = d3.select(svgEl).attr('viewBox', `0 0 ${width} ${height}`);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    if (!rows || !rows.length) {
+      g.append('text').attr('x', innerW / 2).attr('y', innerH / 2).attr('text-anchor', 'middle')
+        .attr('fill', 'var(--color-fg-muted)').attr('font-size', 11).text('No data for this selection');
+      return;
+    }
+
+    const isLog = scaleMode === 'log';
+    const xDomain = [rows[0].bin_lo, rows[rows.length - 1].bin_hi];
+    const x = isLog ? d3.scaleLog(xDomain, [0, innerW]) : d3.scaleLinear(xDomain, [0, innerW]);
+    const y = d3.scaleLinear([0, d3.max(rows, d => d[countKey]) || 1], [innerH, 0]);
+
+    g.append('g').attr('class', 'dq-axis')
+      .call(d3.axisLeft(y).ticks(3).tickSize(3).tickFormat(d3.format('.2~s')))
+      .attr('font-size', null).attr('font-family', null);
+    g.append('g').attr('class', 'dq-axis').attr('transform', `translate(0,${innerH})`)
+      .call(d3.axisBottom(x).ticks(isLog ? 4 : 5).tickSize(3).tickFormat(d3.format('~s')))
+      .attr('font-size', null).attr('font-family', null);
+
+    const tip = d3.select(box).selectAll('.dq-tip').data([0]).join('div').attr('class', 'dq-tip');
+
+    g.selectAll('rect.dq-bar').data(rows).join('rect')
+      .attr('class', 'dq-bar')
+      .style('--dq-bar-color', color)
+      .attr('x', d => x(d.bin_lo))
+      .attr('width', d => Math.max(0.5, x(d.bin_hi) - x(d.bin_lo)))
+      .attr('y', d => y(d[countKey]))
+      .attr('height', d => innerH - y(d[countKey]))
+      .on('mousemove', (ev, d) => {
+        const [mx, my] = d3.pointer(ev, box);
+        tip.style('opacity', 1).style('left', `${mx + 10}px`).style('top', `${my - 8}px`)
+          .html(`${fmt(d.bin_lo)}&ndash;${fmt(d.bin_hi)} ${unit}<br>${fmtInt(Math.round(d[countKey]))} ${yLabel}`);
+      })
+      .on('mouseleave', () => tip.style('opacity', 0));
+
+    if (medianValue != null && !Number.isNaN(medianValue) && medianValue >= xDomain[0] && medianValue <= xDomain[1]) {
+      g.append('line').attr('class', 'dq-refline')
+        .attr('x1', x(medianValue)).attr('x2', x(medianValue)).attr('y1', 0).attr('y2', innerH);
+    }
+  }
+
+  function drawScatter(filtered) {
+    const svgEl = document.querySelector('#dq-scatter-box svg');
+    const box = svgEl.closest('.dq-chart-box');
+    const width = box.clientWidth || 600;
+    const height = 360;
+    const margin = { top: 10, right: 16, bottom: 36, left: 50 };
+    const innerW = Math.max(10, width - margin.left - margin.right);
+    const innerH = height - margin.top - margin.bottom;
+
+    svgEl.innerHTML = '';
+    const svg = d3.select(svgEl).attr('viewBox', `0 0 ${width} ${height}`);
+    const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+
+    const xv = VAR_BY_KEY[scatterX], yv = VAR_BY_KEY[scatterY];
+    const isLog = scaleMode === 'log';
+    const pts = filtered.filter(r => r[scatterX] != null && r[scatterY] != null &&
+      (!isLog || (r[scatterX] > 0 && r[scatterY] > 0)));
+
+    if (!pts.length) {
+      g.append('text').attr('x', innerW / 2).attr('y', innerH / 2).attr('text-anchor', 'middle')
+        .attr('fill', 'var(--color-fg-muted)').attr('font-size', 12).text('No data for this selection');
+      return;
+    }
+
+    const xExt = d3.extent(pts, d => d[scatterX]), yExt = d3.extent(pts, d => d[scatterY]);
+    const x = isLog ? d3.scaleLog(xExt, [0, innerW]) : d3.scaleLinear(xExt, [0, innerW]).nice();
+    const y = isLog ? d3.scaleLog(yExt, [innerH, 0]) : d3.scaleLinear(yExt, [innerH, 0]).nice();
+
+    g.append('g').attr('class', 'dq-axis')
+      .call(d3.axisLeft(y).ticks(6).tickSize(3).tickFormat(d3.format('~s')))
+      .attr('font-size', null).attr('font-family', null);
+    g.append('g').attr('class', 'dq-axis').attr('transform', `translate(0,${innerH})`)
+      .call(d3.axisBottom(x).ticks(6).tickSize(3).tickFormat(d3.format('~s')))
+      .attr('font-size', null).attr('font-family', null);
+
+    g.append('text').attr('x', innerW / 2).attr('y', innerH + 32).attr('text-anchor', 'middle')
+      .attr('fill', 'var(--color-fg-muted)').attr('font-size', 11).text(`${xv.short} (${xv.unit})`);
+    g.append('text').attr('transform', 'rotate(-90)').attr('x', -innerH / 2).attr('y', -36)
+      .attr('text-anchor', 'middle').attr('fill', 'var(--color-fg-muted)').attr('font-size', 11)
+      .text(`${yv.short} (${yv.unit})`);
+
+    const MAX_POINTS = 4000;
+    const shown = pts.length > MAX_POINTS ? d3.shuffle(pts.slice()).slice(0, MAX_POINTS) : pts;
+
+    const tip = d3.select(box).selectAll('.dq-tip').data([0]).join('div').attr('class', 'dq-tip');
+
+    g.selectAll('circle.dq-dot').data(shown).join('circle')
+      .attr('class', 'dq-dot')
+      .attr('cx', d => x(d[scatterX]))
+      .attr('cy', d => y(d[scatterY]))
+      .attr('r', 2.4)
+      .on('mousemove', (ev, d) => {
+        const [mx, my] = d3.pointer(ev, box);
+        tip.style('opacity', 1).style('left', `${mx + 10}px`).style('top', `${my - 8}px`)
+          .html(`${xv.short}: ${fmt(d[scatterX])} ${xv.unit}<br>${yv.short}: ${fmt(d[scatterY])} ${yv.unit}`);
+      })
+      .on('mouseleave', () => tip.style('opacity', 0));
+
+    if (pts.length > MAX_POINTS) {
+      g.append('text').attr('x', innerW).attr('y', -2).attr('text-anchor', 'end')
+        .attr('fill', 'var(--color-fg-muted)').attr('font-size', 9)
+        .text(`${fmtInt(MAX_POINTS)} of ${fmtInt(pts.length)} points shown`);
+    }
+  }
+
+  function render() {
+    const statsRes = dash.data('stats');
+    const summaryRes = dash.data('summary');
+    const sampleRes = dash.data('sample');
+    const statesRes = dash.data('states');
+
+    document.querySelectorAll('[data-source="summary"][data-field]').forEach(el => {
+      const r = summaryRes.data && summaryRes.data[0];
+      el.textContent = r ? d3.format(',')(r[el.dataset.field]) : '—';
+    });
+
+    const statsRows = statsRes.data || [];
+    const byVar = Object.fromEntries(statsRows.map(r => [r.variable, r]));
+
+    document.querySelectorAll('[data-source="stats"][data-field]').forEach(el => {
+      if (el.closest('table')) return;
+      const where = el.dataset.where;
+      if (!where) return;
+      const [, val] = where.split('=');
+      const row = byVar[val];
+      if (!row) return;
+      const v = row[el.dataset.field];
+      el.textContent = typeof v === 'number' ? d3.format(',.1~f')(v) : v;
+    });
+
+    const tbody = document.querySelector('table.dq-table tbody');
+    tbody.innerHTML = '';
+    VARS.forEach(v => {
+      const r = byVar[v.id];
+      if (!r) return;
+      const tr = document.createElement('tr');
+      tr.dataset.key = v.id;
+      tr.innerHTML = `
+        <td>${r.variable}</td>
+        <td>${fmt(r.median)}</td>
+        <td>${fmt(r.weighted_median)}</td>
+        <td>${fmt(r.mean)}</td>
+        <td>${fmt(r.weighted_mean)}</td>
+        <td>${fmtInt(r.n_missing)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+
+    if (statesRes.status !== 'ok' || sampleRes.status !== 'ok') return;
+    statesRows = statesRes.data || [];
+    buildFilterOptions();
+
+    const stateRegion = Object.fromEntries(statesRows.map(r => [String(r.statecd), r.region]));
+    const stateName = Object.fromEntries(statesRows.map(r => [String(r.statecd), r.name]));
+    const allSample = sampleRes.data || [];
+
+    let filtered = allSample;
+    if (stateSel !== 'all') {
+      filtered = allSample.filter(r => String(r.s) === String(stateSel));
+    } else if (regionSel !== 'all') {
+      filtered = allSample.filter(r => stateRegion[String(r.s)] === regionSel);
+    }
+
+    const scopeLabel = stateSel !== 'all' ? stateName[String(stateSel)]
+      : (regionSel !== 'all' ? regionSel : 'all states');
+    const note = document.getElementById('dq-scope-note');
+    note.innerHTML = `Interactive charts below use a stratified <b>${fmtInt(allSample.length)}</b>-tree sample ` +
+      `(&asymp;2.3% of the full population). Currently showing <b>${fmtInt(filtered.length)}</b> sampled trees &middot; <b>${scopeLabel}</b>.`;
+
+    VARS.forEach(v => {
+      const card = grid.querySelector(`[data-var="${v.id}"]`);
+      if (!card) return;
+      const vals = [], weights = [];
+      for (const r of filtered) {
+        const val = r[v.key];
+        if (val == null || Number.isNaN(val)) continue;
+        vals.push(val);
+        weights.push(r.w || 0);
+      }
+      const isLog = scaleMode === 'log';
+      const bins = computeBins(vals, weights, isLog, nBins);
+
+      const sortedVals = vals.slice().sort((a, b) => a - b);
+      const rawMedian = quantile(sortedVals, 0.5);
+      const weightedMedian = weightedQuantile(vals, weights, 0.5);
+
+      card.querySelector('[data-kind="raw-stat"]').textContent = vals.length ? `median ${fmt(rawMedian)} ${v.unit}` : 'no data';
+      card.querySelector('[data-kind="weighted-stat"]').textContent = vals.length ? `median ${fmt(weightedMedian)} ${v.unit}` : 'no data';
+
+      drawMiniChart(card.querySelector('[data-kind="raw"] svg'), bins, 'raw',
+        { unit: v.unit, yLabel: 'trees', color: 'var(--cds-chart-muted)', medianValue: rawMedian });
+      drawMiniChart(card.querySelector('[data-kind="weighted"] svg'), bins, 'weighted',
+        { unit: v.unit, yLabel: 'trees/acre (rel.)', color: 'var(--dq-accent)', medianValue: weightedMedian });
+    });
+
+    drawScatter(filtered);
+  }
+
+  dash.onData(render);
+})();
+</script>
