@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Hex rainfall map</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<style>
+  :root {
+    --page: #f4f3ef; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --accent: #2a78d6; --series: #2a78d6;
+    --state: rgba(11,11,11,.55); --nodata: #ecebe6;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --accent: #3987e5; --series: #3987e5;
+    --state: rgba(255,255,255,.55); --nodata: #151514;
+  } }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: var(--page); color: var(--ink); }
+  canvas { position: absolute; inset: 0; display: block; touch-action: none; }
+  #over { cursor: grab; } #over.drag { cursor: grabbing; }
+  .panel { position: absolute; background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 12px 14px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+  #ctl { left: 12px; top: 12px; width: 280px; max-height: calc(100% - 24px); overflow: auto; }
+  #card { right: 12px; top: 12px; width: 300px; display: none; max-height: calc(100% - 24px); overflow: auto; }
+  #leg { left: 12px; bottom: 12px; width: 280px; }
+  h1 { font-size: 16px; margin: 0 0 2px; font-weight: 650; } h2 { font-size: 15px; margin: 0; font-weight: 650; }
+  .sub { font-size: 12px; color: var(--ink2); line-height: 1.4; margin: 0 0 10px; }
+  .sub a, .note a { color: var(--accent); }
+  .row { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; }
+  .row label { flex: 0 0 52px; color: var(--ink2); font-size: 12px; }
+  select, button { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface); border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; }
+  select { flex: 1; min-width: 0; } button { cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:focus-visible, select:focus-visible, input:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  input[type=range] { flex: 1; accent-color: var(--accent); min-width: 0; }
+  .yr { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 52px; text-align: right; }
+  #play { width: 32px; height: 32px; border-radius: 50%; padding: 0; flex: none; }
+  .btns { display: flex; gap: 6px; } .btns button { flex: 1; }
+  .nm { font-size: 11px; color: var(--ink2); margin-bottom: 4px; }
+  .bar { height: 10px; border-radius: 3px; }
+  .ticks { position: relative; height: 16px; font-size: 11px; color: var(--ink2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
+  .hexinfo { font-size: 12px; color: var(--ink2); margin-top: 8px; line-height: 1.45; }
+  .hexinfo b { color: var(--ink); font-weight: 600; }
+  .note { font-size: 11.5px; color: var(--ink2); line-height: 1.45; margin-top: 8px; }
+  .big { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 6px 0 0; }
+  .lbl { font-size: 11px; color: var(--ink2); }
+  .hd { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+  .hd button { padding: 2px 8px; }
+  hr { border: 0; border-top: 1px solid var(--grid); margin: 10px 0; }
+  svg { width: 100%; display: block; overflow: visible; }
+  svg text { font-family: inherit; fill: var(--muted); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+  .tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink); border: 1px solid var(--axis);
+    border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.45; box-shadow: 0 4px 14px rgba(0,0,0,.18); display: none; font-variant-numeric: tabular-nums; }
+  .tip .m { color: var(--ink2); }
+  #msg { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); background: var(--surface); border: 1px solid var(--grid); border-radius: 8px; padding: 12px 16px; font-size: 13px; color: var(--ink2); display: none; text-align: center; line-height: 1.5; }
+  #msg code { color: var(--ink); }
+  @media (max-width: 760px) { #ctl, #leg { width: calc(100% - 24px); } #leg { bottom: 12px; } #ctl { max-height: 45%; } #card { top: auto; bottom: 110px; width: calc(100% - 24px); max-height: 38%; } }
+</style>
+</head>
+<body>
+<canvas id="base" aria-hidden="true"></canvas>
+<canvas id="over" tabindex="0" aria-label="Hexagon rainfall map. Drag to pan, scroll to zoom, click a hexagon to zoom to its state."></canvas>
+
+<div class="panel" id="ctl">
+  <h1>Hex rainfall map</h1>
+  <p class="sub">Equal-area hexagons (Albers projection). They shrink as you zoom, down to exactly 1 acre. Click one to zoom to its state. <a href="drought.html">Drought dashboard &rarr;</a></p>
+  <div class="row"><label for="layer">Layer</label><select id="layer"></select></div>
+  <div class="row"><button id="play" aria-label="Play or pause">&#9654;</button><input id="yr" type="range" min="0" max="32" step="1" aria-label="Year"><span class="yr" id="yrv"></span></div>
+  <div class="row"><label for="st">State</label><select id="st"><option value="">Whole US</option></select></div>
+  <div class="btns"><button id="zin" aria-label="Zoom in">+</button><button id="zout" aria-label="Zoom out">&minus;</button><button id="reset">Reset view</button></div>
+  <div class="hexinfo" id="hexinfo"></div>
+</div>
+
+<div class="panel" id="card">
+  <div class="hd"><div><h2 id="c-name"></h2><div class="lbl" id="c-sub"></div></div><button id="c-x" aria-label="Clear selection">&times;</button></div>
+  <div class="big" id="c-val"></div><div class="lbl" id="c-lbl"></div>
+  <svg id="c-chart" role="img" aria-label="State mean by year"></svg>
+  <hr>
+  <div class="hexinfo" id="c-hex"></div>
+</div>
+
+<div class="panel" id="leg">
+  <div class="nm" id="lg-n"></div><div class="bar" id="lg-b"></div><div class="ticks" id="lg-t"></div>
+  <div class="hexinfo" id="lg-h"></div>
+  <div class="note" id="lg-note"></div>
+</div>
+<div id="msg"></div>
+<div class="tip" id="tip"></div>
+
+<script src="vendor/topojson-client.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+
+// ---- equal-area projection (spherical Albers, CONUS parameters) ---------------------
+const R = 6371007.2, D = Math.PI / 180, P1 = 29.5 * D, P2 = 45.5 * D, P0 = 37.5 * D, L0 = -96 * D;
+const AN = (Math.sin(P1) + Math.sin(P2)) / 2, AC = Math.cos(P1) ** 2 + 2 * AN * Math.sin(P1);
+const RHO0 = R * Math.sqrt(AC - 2 * AN * Math.sin(P0)) / AN;
+function fwd(lon, lat) {
+  const rho = R * Math.sqrt(AC - 2 * AN * Math.sin(lat * D)) / AN, th = AN * (lon * D - L0);
+  return [rho * Math.sin(th), RHO0 - rho * Math.cos(th)];
+}
+function inv(x, y) {
+  const dy = RHO0 - y, rho = Math.hypot(x, dy), th = Math.atan2(x, dy);
+  return [(L0 + th / AN) / D, Math.asin((AC - (rho * AN / R) ** 2) / (2 * AN)) / D];
+}
+
+const ACRE = 4046.8564224, HEXK = 1.5 * Math.sqrt(3), SQ3 = Math.sqrt(3), CAP = 24000, SMAX = 1.5;
+const sideOf = A => Math.sqrt(A / HEXK);
+const baseC = $("base"), overC = $("over"), bg = baseC.getContext("2d"), og = overC.getContext("2d");
+let W = 0, H = 0, dpr = 1;
+
+const S = { meta: null, layers: {}, layer: null, layerName: "rain", t: 32, view: { cx: 0, cy: 0, s: 0.0003 }, fit: null,
+            states: [], stateById: null, state: null, sel: null, hover: null, k: 0, dirty: true, odirty: true,
+            anim: null, members: {}, playing: false };
+
+// ---- colour --------------------------------------------------------------------------
+const RAMPS = {
+  light: { div: ["#8e1b1f", "#d03b3b", "#ee9b8c", "#f0efec", "#a9c9f2", "#2a78d6", "#0d366b"], seq: ["#e8f1fc", "#9ec5f4", "#3987e5", "#1c5cab", "#0d366b"] },
+  dark:  { div: ["#ff7b6f", "#b8403c", "#6b3a37", "#383835", "#35506f", "#2a6fc0", "#7fb4f5"], seq: ["#1d2a3a", "#2a5a9a", "#3987e5", "#86b6ef", "#cde2fb"] },
+};
+const isDark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+const hex2 = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function makeLut(kind) {
+  const st = RAMPS[isDark() ? "dark" : "light"][kind].map(hex2), out = [];
+  for (let i = 0; i < 256; i++) {
+    const p = i / 255 * (st.length - 1), k = Math.min(st.length - 2, Math.floor(p)), f = p - k;
+    out.push(`rgb(${[0, 1, 2].map(c => Math.round(st[k][c] + (st[k + 1][c] - st[k][c]) * f)).join(",")})`);
+  }
+  return out;
+}
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+// ---- data -------------------------------------------------------------------------------
+async function inflate(buf) {                 // data files are gzipped; unzip in the browser
+  const u = new Uint8Array(buf);
+  if (u[0] === 0x1f && u[1] === 0x8b) return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  return buf;
+}
+async function bin(url, T) { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return new T(await inflate(await r.arrayBuffer())); }
+const json = async url => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); };
+const N = () => S.meta.rows * S.meta.cols;
+
+const LAYERS = {
+  rain:    { label: "Rainfall (mm per year)", kind: "rain", max: 3000, f: v => Math.round(v).toLocaleString() + " mm", unit: "mm per year" },
+  spi:     { label: "SPI (drought index)", kind: "div", c: 0, h: 2.5, f: v => v.toFixed(2), unit: "SPI; red = drier, blue = wetter", file: "spi" },
+  pn:      { label: "Percent of normal", kind: "div", c: 100, h: 60, f: v => Math.round(v) + "%", unit: "% of 1991–2020 mean", file: "pn" },
+  deficit: { label: "Departure from normal (mm)", kind: "div", c: 0, h: 500, f: v => Math.round(v) + " mm", unit: "mm vs 1991–2020 mean", file: "deficit" },
+};
+async function loadLayer(name) {
+  if (S.layers[name]) return S.layers[name];
+  const L = LAYERS[name], n = N();
+  if (name === "rain") {
+    const [m1, m2] = await Promise.all([json("pulse_data/prism-1991-2020/meta.json"), json("pulse_data/prism-2021-2023/meta.json")]);
+    const [b1, b2] = await Promise.all([bin("pulse_data/prism-1991-2020/years.bin", Uint16Array), bin("pulse_data/prism-2021-2023/years.bin", Uint16Array)]);
+    const n1 = m1.years.length;
+    L.get = (t, i) => {
+      const a = t < n1, q = (a ? b1 : b2)[(a ? t : t - n1) * n + i];
+      if (q === 65535) return NaN;
+      const m = a ? m1 : m2; return m.store_min + q / 65534 * (m.store_max - m.store_min);
+    };
+  } else {
+    const m = S.meta.layers[L.file], a = await bin(`drought_data/prism-1991-2023/${L.file}.bin.gz`, Int16Array);
+    L.get = (t, i) => { const q = a[t * n + i]; return q === m.na ? NaN : q / m.scale; };
+  }
+  return (S.layers[name] = L);
+}
+
+// ---- view -------------------------------------------------------------------------------
+function resize() {
+  dpr = devicePixelRatio || 1; W = innerWidth; H = innerHeight;
+  for (const c of [baseC, overC]) { c.width = Math.round(W * dpr); c.height = Math.round(H * dpr); c.style.width = W + "px"; c.style.height = H + "px"; }
+  if (S.meta) { S.fit = fitBox(S.usBox); if (!S.fitted) { Object.assign(S.view, S.fit); S.fitted = true; } S.dirty = S.odirty = true; }
+}
+const insets = () => W > 1000 ? [310, S.state ? 320 : 0] : [0, 0];
+function fitBox(b, pad = 0.88) {
+  const [l, r] = insets(), vw = Math.max(200, W - l - r), bw = b[2] - b[0], bh = b[3] - b[1];
+  const s = Math.min(SMAX, Math.min(vw * pad / bw, H * pad / bh)), cx = (b[0] + b[2]) / 2 - (l - r) / 2 / s, cy = (b[1] + b[3]) / 2;
+  return { cx, cy, s };
+}
+const toScreen = (X, Y) => [W / 2 + (X - S.view.cx) * S.view.s, H / 2 - (Y - S.view.cy) * S.view.s];
+const toWorld = (px, py) => [S.view.cx + (px - W / 2) / S.view.s, S.view.cy - (py - H / 2) / S.view.s];
+function setView(v) { S.view = v; S.dirty = S.odirty = true; }
+function zoomAt(px, py, f) {
+  const sMin = S.fit.s * 0.7, s = Math.max(sMin, Math.min(SMAX, S.view.s * f)), [X, Y] = toWorld(px, py);
+  setView({ s, cx: X - (px - W / 2) / s, cy: Y + (py - H / 2) / s });
+}
+function animateTo(t, ms = 750) {
+  const a = { ...S.view }, t0 = performance.now();
+  S.anim = now => {
+    const p = Math.min(1, (now - t0) / ms), e = p < .5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+    S.view = { cx: a.cx + (t.cx - a.cx) * e, cy: a.cy + (t.cy - a.cy) * e, s: Math.exp(Math.log(a.s) + (Math.log(t.s) - Math.log(a.s)) * e) };
+    S.dirty = S.odirty = true;
+    if (p >= 1) S.anim = null;
+  };
+}
+
+// ---- hexagon grid -------------------------------------------------------------------------
+function levelFor() {
+  const viewA = (W / S.view.s) * (H / S.view.s);
+  let k = 0; while (viewA * 1.2 / (ACRE * 2 ** k) > CAP) k++;
+  return k;
+}
+function hexAt(X, Y, side) {                       // world point -> hex centre (pointy-top axial grid)
+  const qf = (SQ3 / 3 * X - Y / 3) / side, rf = 2 / 3 * Y / side, sf = -qf - rf;
+  let q = Math.round(qf), r = Math.round(rf), s = Math.round(sf);
+  const dq = Math.abs(q - qf), dr = Math.abs(r - rf), ds = Math.abs(s - sf);
+  if (dq > dr && dq > ds) q = -r - s; else if (dr > ds) r = -q - s;
+  return { q, r, X: side * SQ3 * (q + r / 2), Y: side * 1.5 * r };
+}
+function cellOf(X, Y) {
+  const [lon, lat] = inv(X, Y), m = S.meta, [b0, b1, b2, b3] = m.bounds;
+  const c = Math.floor((lon - b0) / ((b2 - b0) / m.cols)), r = Math.floor((b3 - lat) / ((b3 - b1) / m.rows));
+  if (!(c >= 0 && c < m.cols && r >= 0 && r < m.rows)) return null;
+  return { i: r * m.cols + c, lon, lat };
+}
+function colorIdx(L, v) {
+  const u = L.kind === "div" ? (v - L.c) / L.h * 0.5 + 0.5 : Math.sqrt(Math.min(Math.max(v, 0), L.max) / L.max);
+  return Math.max(0, Math.min(255, Math.round(u * 255)));
+}
+function fmtArea(A) {
+  const ac = A / ACRE;
+  const acs = ac < 1.5 ? "1 acre" : ac < 10000 ? `${Math.round(ac).toLocaleString()} acres` : `${Math.round(ac / 100) * 100 > 1e6 ? (ac / 1e6).toFixed(1) + " million" : Math.round(ac).toLocaleString()} acres`;
+  const sq = A < 1e5 ? `${Math.round(A).toLocaleString()} m²` : `${(A / 1e6).toLocaleString(undefined, { maximumFractionDigits: A < 1e7 ? 2 : 0 })} km²`;
+  return `${acs} · ${sq}`;
+}
+
+function drawBase() {
+  const L = S.layer, v = S.view, k = (S.k = levelFor()), A = ACRE * 2 ** k, side = sideOf(A), hw = SQ3 * side;
+  bg.setTransform(dpr, 0, 0, dpr, 0, 0); bg.clearRect(0, 0, W, H);
+  if (!L) return;
+  const lut = makeLut(L.kind === "div" ? "div" : "seq"), buckets = new Array(256), t = S.t, s = v.s;
+  const [x0, y1] = toWorld(0, 0), [x1, y0] = toWorld(W, H);
+  const rmin = Math.floor(y0 / (1.5 * side)) - 1, rmax = Math.ceil(y1 / (1.5 * side)) + 1;
+  const ox = [0, .8660254, .8660254, 0, -.8660254, -.8660254].map(a => a * side * s), oy = [1, .5, -.5, -1, -.5, .5].map(a => a * side * s);
+  for (let r = rmin; r <= rmax; r++) {
+    const qmin = Math.floor(x0 / hw - r / 2) - 1, qmax = Math.ceil(x1 / hw - r / 2) + 1, Y = side * 1.5 * r;
+    for (let q = qmin; q <= qmax; q++) {
+      const X = hw * (q + r / 2), c = cellOf(X, Y); if (!c) continue;
+      const val = L.get(t, c.i); if (val !== val) continue;
+      const bi = colorIdx(L, val), px = W / 2 + (X - v.cx) * s, py = H / 2 - (Y - v.cy) * s;
+      const p = buckets[bi] || (buckets[bi] = new Path2D());
+      p.moveTo(px + ox[0], py - oy[0]);
+      for (let j = 1; j < 6; j++) p.lineTo(px + ox[j], py - oy[j]);
+      p.closePath();
+    }
+  }
+  const big = hw * s > 14, edge = css("--surface");
+  const paint = alpha => {
+    bg.globalAlpha = alpha;
+    buckets.forEach((p, i) => {
+      if (!p) return;
+      bg.fillStyle = lut[i]; bg.fill(p);
+      bg.strokeStyle = big ? edge : lut[i]; bg.lineWidth = big ? 1 : 0.7; bg.globalAlpha = big ? alpha * 0.55 : alpha; bg.stroke(p); bg.globalAlpha = alpha;
+    });
+  };
+  if (S.state) {
+    paint(0.22);
+    bg.save(); bg.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 + v.cy * s));
+    bg.clip(S.state.path, "evenodd"); bg.setTransform(dpr, 0, 0, dpr, 0, 0); paint(1); bg.restore();
+  } else paint(1);
+  bg.globalAlpha = 1;
+  S.lut = lut; S.hexSide = side; S.hexA = A;
+}
+
+function hexPath(ctx, X, Y, side, s) {
+  const [px, py] = toScreen(X, Y), ox = [0, .8660254, .8660254, 0, -.8660254, -.8660254], oy = [1, .5, -.5, -1, -.5, .5];
+  ctx.beginPath();
+  for (let j = 0; j < 6; j++) { const x = px + ox[j] * side * s, y = py - oy[j] * side * s; j ? ctx.lineTo(x, y) : ctx.moveTo(x, y); }
+  ctx.closePath();
+}
+function drawOver() {
+  const v = S.view, s = v.s;
+  og.setTransform(dpr, 0, 0, dpr, 0, 0); og.clearRect(0, 0, W, H);
+  og.save(); og.setTransform(dpr * s, 0, 0, -dpr * s, dpr * (W / 2 - v.cx * s), dpr * (H / 2 + v.cy * s));
+  og.lineJoin = "round"; og.strokeStyle = css("--state"); og.lineWidth = 0.9 / s; og.globalAlpha = S.state ? 0.55 : 0.9; og.stroke(S.allPath);
+  og.globalAlpha = 1;
+  if (S.state) { og.strokeStyle = css("--ink"); og.lineWidth = 2.2 / s; og.stroke(S.state.path); }
+  og.restore();
+  const side = S.hexSide;
+  for (const [pt, w] of [[S.hover, 1.5], [S.sel, 2.5]]) {
+    if (!pt) continue;
+    const h = hexAt(pt.X, pt.Y, side); hexPath(og, h.X, h.Y, side, s);
+    og.lineWidth = w + 1.5; og.strokeStyle = css("--surface"); og.stroke();
+    og.lineWidth = w; og.strokeStyle = css("--ink"); og.stroke();
+  }
+}
+
+// ---- states --------------------------------------------------------------------------------
+const SKIP = new Set(["Alaska", "Hawaii", "Puerto Rico", "American Samoa", "Guam", "Commonwealth of the Northern Mariana Islands", "United States Virgin Islands"]);
+function buildStates(topo) {
+  const feats = topojson.feature(topo, topo.objects.states).features.filter(f => !SKIP.has(f.properties.name));
+  S.allPath = new Path2D(); const all = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const f of feats) {
+    const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const path = new Path2D(), rings = [], bb = [Infinity, Infinity, -Infinity, -Infinity], ll = [Infinity, Infinity, -Infinity, -Infinity];
+    for (const poly of polys) for (const ring of poly) {
+      const arr = new Float64Array(ring.length * 2);
+      ring.forEach(([lon, lat], j) => {
+        arr[j * 2] = lon; arr[j * 2 + 1] = lat;
+        const [X, Y] = fwd(lon, lat);
+        j ? path.lineTo(X, Y) : path.moveTo(X, Y);
+        bb[0] = Math.min(bb[0], X); bb[1] = Math.min(bb[1], Y); bb[2] = Math.max(bb[2], X); bb[3] = Math.max(bb[3], Y);
+        ll[0] = Math.min(ll[0], lon); ll[1] = Math.min(ll[1], lat); ll[2] = Math.max(ll[2], lon); ll[3] = Math.max(ll[3], lat);
+      });
+      path.closePath(); rings.push(arr);
+    }
+    S.allPath.addPath(path);
+    all[0] = Math.min(all[0], bb[0]); all[1] = Math.min(all[1], bb[1]); all[2] = Math.max(all[2], bb[2]); all[3] = Math.max(all[3], bb[3]);
+    S.states.push({ name: f.properties.name, path, rings, box: bb, ll });
+  }
+  S.states.sort((a, b) => a.name.localeCompare(b.name));
+  S.usBox = all;
+  for (const st of S.states) $("st").add(new Option(st.name, st.name));
+}
+function stateAt(lon, lat) {
+  for (const st of S.states) {
+    const b = st.ll; if (lon < b[0] || lon > b[2] || lat < b[1] || lat > b[3]) continue;
+    let inside = false;
+    for (const ring of st.rings) for (let i = 0, j = ring.length / 2 - 1; i < ring.length / 2; j = i++) {
+      const xi = ring[i * 2], yi = ring[i * 2 + 1], xj = ring[j * 2], yj = ring[j * 2 + 1];
+      if ((yi > lat) !== (yj > lat) && lon < (xj - xi) * (lat - yi) / (yj - yi) + xi) inside = !inside;
+    }
+    if (inside) return st;
+  }
+  return null;
+}
+function membersOf(st) {                           // data cells inside the state (+ cos-lat weights)
+  if (st.members) return st.members;
+  const m = S.meta, [b0, b1, b2, b3] = m.bounds, cv = document.createElement("canvas");
+  cv.width = m.cols; cv.height = m.rows;
+  const g = cv.getContext("2d"); g.fillStyle = "#fff"; g.beginPath();
+  for (const ring of st.rings) for (let i = 0; i < ring.length / 2; i++) {
+    const x = (ring[i * 2] - b0) / (b2 - b0) * m.cols, y = (b3 - ring[i * 2 + 1]) / (b3 - b1) * m.rows;
+    i ? g.lineTo(x, y) : g.moveTo(x, y);
+  }
+  g.fill("evenodd");
+  const px = g.getImageData(0, 0, m.cols, m.rows).data, idx = [], w = [];
+  for (let i = 0; i < m.cols * m.rows; i++) if (px[i * 4 + 3] > 127) {
+    idx.push(i); w.push(Math.cos((b3 - (Math.floor(i / m.cols) + 0.5) / m.rows * (b3 - b1)) * D));
+  }
+  return (st.members = { idx, w });
+}
+function selectState(st, sel) {
+  const was = S.state;
+  S.state = st; S.sel = sel || null; S.dirty = S.odirty = true;
+  tip.style.display = "none"; S.hover = null;
+  $("st").value = st ? st.name : "";
+  if (st && st !== was) animateTo(fitBox(st.box, 0.82));
+  else if (!st) animateTo(fitBox(S.usBox));
+  updateCard();
+}
+
+// ---- panels -----------------------------------------------------------------------------------
+function legend() {
+  const L = S.layer, lut = makeLut(L.kind === "div" ? "div" : "seq"), st = [];
+  for (let i = 0; i < 12; i++) st.push(`${lut[Math.round(i / 11 * 255)]} ${i / 11 * 100}%`);
+  $("lg-b").style.background = `linear-gradient(90deg, ${st.join(",")})`;
+  let ticks;
+  if (L.kind === "div") ticks = [[0, L.c - L.h], [.25, L.c - L.h / 2], [.5, L.c], [.75, L.c + L.h / 2], [1, L.c + L.h]];
+  else ticks = [0, 250, 500, 1000, 2000, 3000].map(v => [Math.sqrt(v / L.max), v]);
+  $("lg-t").innerHTML = ticks.map(([p, v], i) => `<span style="left:${p * 100}%">${i === 0 && L.kind === "div" ? "≤ " : ""}${L.f(+v.toFixed(2)).replace(" mm", "")}${i === ticks.length - 1 && L.kind === "div" ? " ≥" : ""}</span>`).join("");
+  $("lg-n").textContent = `${L.label}, ${S.meta.years[S.t]}${L.kind === "rain" ? " (colour scale is square-root)" : ""}`;
+}
+function legendHex() {
+  const A = S.hexA, cell = hexCellArea();
+  $("lg-h").innerHTML = `Hexagon area: <b>${fmtArea(A)}</b>${A <= ACRE * 1.01 ? " (minimum zoom-in)" : ""}`;
+  $("lg-note").textContent = A < cell
+    ? `Source cells are about ${Math.round(cell / ACRE).toLocaleString()} acres (~8 km). Hexagons smaller than that repeat the value of the cell beneath them, so detail finer than a cell is not real.`
+    : "";
+}
+function hexCellArea() {
+  const m = S.meta, [b0, b1, b2, b3] = m.bounds, lat = 38 * D;
+  return ((b2 - b0) / m.cols * D * R * Math.cos(lat)) * ((b3 - b1) / m.rows * D * R);
+}
+function hexValue(pt) {
+  if (!pt) return null;
+  const h = hexAt(pt.X, pt.Y, S.hexSide), c = cellOf(h.X, h.Y); if (!c) return null;
+  const v = S.layer.get(S.t, c.i); return v === v ? { v, lon: c.lon, lat: c.lat, h } : null;
+}
+const fmtLL = (lat, lon) => `${Math.abs(lat).toFixed(3)}°${lat >= 0 ? "N" : "S"}, ${Math.abs(lon).toFixed(3)}°${lon >= 0 ? "E" : "W"}`;
+function updateCard() {
+  const card = $("card"), st = S.state;
+  card.style.display = st ? "block" : "none";
+  if (!st) { $("hexinfo").innerHTML = ""; return; }
+  const L = S.layer, mem = membersOf(st), T = S.meta.years.length, ser = [];
+  for (let t = 0; t < T; t++) { let a = 0, w = 0; mem.idx.forEach((i, j) => { const v = L.get(t, i); if (v === v) { a += v * mem.w[j]; w += mem.w[j]; } }); ser.push(w ? a / w : NaN); }
+  $("c-name").textContent = st.name;
+  $("c-sub").textContent = `${mem.idx.length.toLocaleString()} data cells · ${S.meta.years[S.t]}`;
+  $("c-val").textContent = ser[S.t] === ser[S.t] ? L.f(ser[S.t]) : "No data";
+  $("c-lbl").textContent = `State mean, ${L.label.toLowerCase()}`;
+  // chart
+  const svg = $("c-chart"), w = 270, h = 96, pl = 6, pr = 6, pt = 16, pb = 16, ys = S.meta.years;
+  const ok = ser.filter(v => v === v), lo = Math.min(...ok, L.kind === "div" ? L.c : Infinity), hi = Math.max(...ok, L.kind === "div" ? L.c : -Infinity);
+  const X = i => pl + i / (T - 1) * (w - pl - pr), Y = v => pt + (1 - (v - lo) / (hi - lo || 1)) * (h - pt - pb);
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  const path = ser.map((v, i) => v === v ? `${i ? "L" : "M"}${X(i).toFixed(1)},${Y(v).toFixed(1)}` : "").join("");
+  svg.innerHTML = (L.kind === "div" ? `<line x1="${pl}" x2="${w - pr}" y1="${Y(L.c)}" y2="${Y(L.c)}" stroke="var(--axis)" stroke-width="1.5"/>` : "") +
+    `<path d="${path}" fill="none" stroke="var(--series)" stroke-width="2" stroke-linejoin="round"/>` +
+    `<circle cx="${X(S.t)}" cy="${ser[S.t] === ser[S.t] ? Y(ser[S.t]) : 0}" r="5" fill="var(--series)" stroke="var(--surface)" stroke-width="2"/>` +
+    `<text x="${pl}" y="${h - 3}">${ys[0]}</text><text x="${w - pr}" y="${h - 3}" text-anchor="end">${ys[T - 1]}</text>` +
+    `<text x="${pl}" y="${pt - 1}">${L.f(hi)}</text>`;
+  updateHexInfo();
+}
+function updateHexInfo() {
+  const hv = hexValue(S.sel), el = $("c-hex");
+  if (!S.state) return;
+  el.innerHTML = hv ? `<b>Selected hexagon</b><br>${L_f(hv.v)} in ${S.meta.years[S.t]}<br>${fmtLL(hv.lat, hv.lon)}<br>${fmtArea(S.hexA)}` : `Click a hexagon to inspect it.`;
+}
+const L_f = v => S.layer.f(v);
+
+// ---- interaction -------------------------------------------------------------------------------
+const tip = $("tip");
+const ptrs = new Map(); let moved = 0, last = null, pinch = 0;
+overC.addEventListener("pointerdown", e => {
+  overC.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); moved = 0; S.anim = null;
+  last = { x: e.clientX, y: e.clientY }; overC.classList.add("drag");
+  if (ptrs.size === 2) { const [a, b] = [...ptrs.values()]; pinch = Math.hypot(a.x - b.x, a.y - b.y); }
+});
+overC.addEventListener("pointermove", e => {
+  if (ptrs.has(e.pointerId)) {
+    const prev = ptrs.get(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()], d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch) zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinch); pinch = d; moved = 99;
+    } else {
+      const dx = e.clientX - prev.x, dy = e.clientY - prev.y; moved += Math.abs(dx) + Math.abs(dy);
+      setView({ ...S.view, cx: S.view.cx - dx / S.view.s, cy: S.view.cy + dy / S.view.s });
+    }
+    tip.style.display = "none"; return;
+  }
+  hoverAt(e);
+});
+overC.addEventListener("pointerup", e => {
+  overC.classList.remove("drag"); ptrs.delete(e.pointerId); pinch = 0;
+  if (moved < 5 && ptrs.size === 0) clickAt(e);
+});
+overC.addEventListener("pointercancel", e => { ptrs.delete(e.pointerId); overC.classList.remove("drag"); });
+overC.addEventListener("pointerleave", () => { tip.style.display = "none"; S.hover = null; S.odirty = true; });
+overC.addEventListener("wheel", e => { e.preventDefault(); S.anim = null; zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * (e.ctrlKey ? 0.01 : 0.0017))); }, { passive: false });
+overC.addEventListener("keydown", e => {
+  if (e.key === "+" || e.key === "=") zoomAt(W / 2, H / 2, 1.6); else if (e.key === "-") zoomAt(W / 2, H / 2, 1 / 1.6);
+  else if (e.key === "0" || e.key === "Escape") selectState(null);
+});
+function pick(e) {
+  const [X, Y] = toWorld(e.clientX, e.clientY), h = hexAt(X, Y, S.hexSide), c = cellOf(h.X, h.Y);
+  if (!c) return null;
+  const v = S.layer.get(S.t, c.i); if (v !== v) return null;
+  return { X: h.X, Y: h.Y, v, lon: c.lon, lat: c.lat };
+}
+function hoverAt(e) {
+  const p = pick(e);
+  S.hover = p ? { X: p.X, Y: p.Y } : null; S.odirty = true;
+  if (!p) { tip.style.display = "none"; return; }
+  const st = stateAt(p.lon, p.lat);
+  tip.innerHTML = `<b>${S.layer.f(p.v)}</b> <span class="m">${S.meta.years[S.t]}</span><div class="m">${st ? st.name + " · " : ""}${fmtLL(p.lat, p.lon)}</div><div class="m">Hexagon ${fmtArea(S.hexA)}</div>`;
+  tip.style.display = "block";
+  tip.style.left = Math.min(innerWidth - tip.offsetWidth - 8, e.clientX + 14) + "px";
+  tip.style.top = Math.min(innerHeight - tip.offsetHeight - 8, e.clientY + 14) + "px";
+}
+function clickAt(e) {
+  const p = pick(e); if (!p) return;
+  const st = stateAt(p.lon, p.lat);
+  if (st) selectState(st, { X: p.X, Y: p.Y }); else { S.sel = { X: p.X, Y: p.Y }; S.odirty = true; updateHexInfo(); }
+}
+$("zin").onclick = () => zoomAt(W / 2, H / 2, 1.8); $("zout").onclick = () => zoomAt(W / 2, H / 2, 1 / 1.8);
+$("reset").onclick = () => selectState(null); $("c-x").onclick = () => selectState(null);
+$("st").onchange = e => selectState(S.states.find(s => s.name === e.target.value) || null);
+$("layer").onchange = async e => { await setLayer(e.target.value); };
+$("yr").oninput = e => { S.t = +e.target.value; yearChanged(); };
+function yearChanged() { $("yrv").textContent = S.meta.years[S.t]; S.dirty = S.odirty = true; legend(); updateCard(); }
+$("play").onclick = () => {
+  S.playing = !S.playing; $("play").innerHTML = S.playing ? "&#10074;&#10074;" : "&#9654;";
+  const step = () => { if (!S.playing) return; S.t = (S.t + 1) % S.meta.years.length; $("yr").value = S.t; yearChanged(); setTimeout(step, 700); };
+  if (S.playing) setTimeout(step, 300);
+};
+async function setLayer(name) {
+  $("msg").style.display = "block"; $("msg").textContent = "Loading…";
+  try { S.layer = await loadLayer(name); S.layerName = name; } catch (e) { return fail(e); }
+  $("msg").style.display = "none"; $("layer").value = name; S.dirty = S.odirty = true; legend(); updateCard();
+}
+function fail(e) {
+  $("msg").style.display = "block";
+  $("msg").innerHTML = `Couldn’t load the data (${String(e.message || e)}).<br>Serve this folder with <code>python serve.py</code> and open <code>http://localhost:8000/hexrain.html</code>.`;
+}
+addEventListener("resize", resize);
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { S.dirty = S.odirty = true; if (S.layer) legend(); });
+
+function frame(now) {
+  if (S.anim) S.anim(now);
+  if (S.dirty && S.layer) { drawBase(); legendHex(); S.dirty = false; if (S.state || S.sel) updateHexInfo(); }
+  if (S.odirty && S.layer) { drawOver(); S.odirty = false; }
+  requestAnimationFrame(frame);
+}
+(async function boot() {
+  try {
+    S.meta = await json("drought_data/prism-1991-2023/meta.json");
+    buildStates(await json("vendor/states-10m.json"));
+    for (const k in LAYERS) $("layer").add(new Option(LAYERS[k].label, k));
+    S.t = S.meta.years.length - 1; $("yr").max = S.t; $("yr").value = S.t; $("yrv").textContent = S.meta.years[S.t];
+    resize(); await setLayer("rain");
+    requestAnimationFrame(frame);
+  } catch (e) { fail(e); }
+})();
+</script>
+</body>
+</html>

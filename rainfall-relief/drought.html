@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Drought indices dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  :root {
+    --page: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink2: #52514e; --muted: #898781;
+    --grid: #e1e0d9; --axis: #c3c2b7; --series: #2a78d6; --accent: #2a78d6;
+    --c1: #ee9b8c; --c2: #e0675a; --c3: #c13b3b; --c4: #7d1a1f;     /* drought classes, ordinal */
+    --nodata: #ecebe6; --state: rgba(11,11,11,.38);
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --page: #0d0d0d; --surface: #1a1a19; --ink: #ffffff; --ink2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --series: #3987e5; --accent: #3987e5;
+    --c1: #7a3a37; --c2: #b8403c; --c3: #e8584f; --c4: #ff9a8f;
+    --nodata: #232322; --state: rgba(255,255,255,.4);
+  } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--ink); }
+  .app { max-width: 1320px; margin: 0 auto; padding: 16px; }
+  header h1 { font-size: 20px; margin: 0 0 2px; font-weight: 650; }
+  header p { margin: 0; font-size: 13px; color: var(--ink2); }
+  header a { color: var(--accent); }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 14px 0; }
+  .filters label { font-size: 12px; color: var(--ink2); display: flex; align-items: center; gap: 6px; }
+  select, button { font: inherit; font-size: 13px; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--axis); border-radius: 6px; padding: 5px 8px; }
+  button { cursor: pointer; }
+  button:focus-visible, select:focus-visible, input:focus-visible, svg:focus-visible, canvas:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .tabs { display: flex; border: 1px solid var(--axis); border-radius: 7px; overflow: hidden; background: var(--surface); }
+  .tabs button { border: 0; border-radius: 0; background: transparent; color: var(--ink2); padding: 6px 12px; }
+  .tabs button[aria-pressed=true] { background: var(--accent); color: #fff; }
+  .main { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 14px; position: relative; }
+  .card h2 { font-size: 14px; font-weight: 600; margin: 0 0 2px; }
+  .card .sub { font-size: 12px; color: var(--ink2); margin: 0 0 10px; line-height: 1.4; }
+  .stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+  .mapwrap { position: relative; }
+  canvas { display: block; width: 100%; border-radius: 6px; background: var(--nodata); cursor: crosshair; }
+  .yearbar { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; }
+  .yearbar input[type=range] { flex: 1; accent-color: var(--accent); }
+  .yearbar .yr { font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 66px; }
+  #play { width: 34px; height: 34px; border-radius: 50%; padding: 0; }
+  .legend { margin-top: 10px; }
+  .legend .bar { height: 10px; border-radius: 3px; }
+  .legend .ticks { position: relative; height: 16px; font-size: 11px; color: var(--ink2); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .legend .ticks span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+  .legend .ticks span:first-child { transform: none; } .legend .ticks span:last-child { transform: translateX(-100%); }
+  .legend .nm { font-size: 11px; color: var(--ink2); margin-bottom: 4px; }
+  .kpis { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .kpi { background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; padding: 10px 12px; min-width: 0; }
+  .kpi .l { font-size: 11px; color: var(--ink2); }
+  .kpi .v { font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; margin: 2px 0; }
+  .kpi .d { font-size: 11px; color: var(--ink2); }
+  svg { display: block; width: 100%; overflow: visible; }
+  svg text { font-family: inherit; fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--ink2); margin-bottom: 6px; }
+  .key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .tip { position: fixed; pointer-events: none; z-index: 10; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--axis); border-radius: 6px; padding: 6px 9px; font-size: 12px; line-height: 1.45;
+    box-shadow: 0 4px 14px rgba(0,0,0,.18); display: none; font-variant-numeric: tabular-nums; max-width: 240px; }
+  .tip b { font-weight: 600; } .tip .m { color: var(--ink2); }
+  details { margin-top: 16px; } summary { cursor: pointer; font-size: 13px; color: var(--ink2); }
+  table { border-collapse: collapse; width: 100%; font-size: 12px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); } th:first-child, td:first-child { text-align: left; }
+  th { color: var(--ink2); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+  .scroll { max-height: 320px; overflow: auto; }
+  .about dl { display: grid; grid-template-columns: 170px 1fr; gap: 6px 14px; font-size: 12.5px; color: var(--ink2); line-height: 1.5; }
+  .about dt { color: var(--ink); font-weight: 600; } .about dd { margin: 0; }
+  @media (max-width: 600px) { .about dl { grid-template-columns: 1fr; } .kpis { grid-template-columns: 1fr 1fr 1fr; } .kpi .v { font-size: 19px; } }
+  .note { font-size: 12px; color: var(--ink2); margin-top: 14px; line-height: 1.5; }
+  .err { padding: 40px 16px; color: var(--ink2); text-align: center; line-height: 1.6; }
+  .err code { color: var(--ink); }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header>
+    <h1>Drought indices dashboard</h1>
+    <p>US annual precipitation (PRISM) scored against the <span id="base">1991&ndash;2020</span> normal. <a href="hexrain.html">Hex rainfall map &rarr;</a> &middot; <a href="pulse.html">Rain pulse 3D &rarr;</a> &middot; <a href="index.html">30-year normal map &rarr;</a></p>
+  </header>
+
+  <div class="filters">
+    <div class="tabs" role="group" aria-label="Index type">
+      <button id="t-year" aria-pressed="true">Yearly indices</button>
+      <button id="t-sum" aria-pressed="false">Period summaries</button>
+    </div>
+    <label>Index <select id="idx"></select></label>
+    <label>Region <select id="reg"></select></label>
+  </div>
+
+  <div class="main">
+    <div class="stack">
+      <div class="card">
+        <h2 id="map-t"></h2>
+        <p class="sub" id="map-s"></p>
+        <div class="mapwrap"><canvas id="map" tabindex="0" aria-label="Map of the selected index. Click a cell to chart its history."></canvas></div>
+        <div class="yearbar" id="yearbar">
+          <button id="play" aria-label="Play or pause">&#9654;</button>
+          <input id="yr" type="range" min="0" max="1" step="1" aria-label="Year">
+          <span class="yr" id="yrv"></span>
+        </div>
+        <div class="legend"><div class="nm" id="lg-n"></div><div class="bar" id="lg-b"></div><div class="ticks" id="lg-t"></div></div>
+      </div>
+      <div class="card" id="pt-card">
+        <h2 id="pt-t">Selected location</h2>
+        <p class="sub" id="pt-s">Click the map to chart one cell&rsquo;s history.</p>
+        <svg id="pt" role="img" aria-label="Selected cell history"></svg>
+      </div>
+    </div>
+
+    <div class="stack">
+      <div class="kpis">
+        <div class="kpi"><div class="l">Area in drought</div><div class="v" id="k1"></div><div class="d" id="k1d"></div></div>
+        <div class="kpi"><div class="l" id="k2l">Mean SPI</div><div class="v" id="k2"></div><div class="d" id="k2d"></div></div>
+        <div class="kpi"><div class="l">Driest year</div><div class="v" id="k3"></div><div class="d" id="k3d"></div></div>
+      </div>
+      <div class="card">
+        <h2 id="ln-t"></h2>
+        <p class="sub" id="ln-s"></p>
+        <svg id="ln" role="img" aria-label="Regional mean by year"></svg>
+      </div>
+      <div class="card">
+        <h2>Share of area in drought</h2>
+        <p class="sub">Land area by SPI class, per year. Drought = SPI at or below &minus;1.</p>
+        <div class="key" id="cls-key"></div>
+        <svg id="cls" role="img" aria-label="Share of area by drought class per year"></svg>
+      </div>
+    </div>
+  </div>
+
+  <details>
+    <summary>Table view (selected region)</summary>
+    <div class="scroll"><table id="tbl"></table></div>
+  </details>
+
+  <details class="about">
+    <summary>About these indices</summary>
+    <dl>
+      <dt>SPI</dt><dd>Standardized Precipitation Index. The year&rsquo;s total is fitted to a gamma distribution for that cell (baseline years only) and converted to a standard normal score. 0 is normal; &le; &minus;1 moderate drought or worse; &le; &minus;1.5 severe; &le; &minus;2 extreme. Because the input is annual totals this is a 12-month SPI for the calendar year.</dd>
+      <dt>Percent of normal</dt><dd>Annual total as a percentage of the baseline mean. Simple, but hard to compare between wet and dry climates.</dd>
+      <dt>Z-score</dt><dd>(Total &minus; baseline mean) / baseline standard deviation. Like SPI without the skew correction.</dd>
+      <dt>Rainfall Anomaly Index</dt><dd>van Rooy (1965). Departure from the mean scaled by the mean of the 10% wettest (or driest) baseline years; roughly &minus;3 to +3 for the extremes.</dd>
+      <dt>Decile</dt><dd>1 = driest 10% of baseline years, 10 = wettest. Based on the fitted distribution.</dd>
+      <dt>Departure (mm)</dt><dd>Total minus baseline mean, in millimetres.</dd>
+      <dt>Consecutive dry years</dt><dd>Run of years with SPI &lt; 0, counting up to the selected year.</dd>
+      <dt>Summaries</dt><dd>Computed over every year in the record: drought frequency (% of years with SPI &le; &minus;1), severity (sum of &minus;SPI in those years), worst SPI and the year it happened, longest dry spell, coefficient of variation of annual rainfall.</dd>
+    </dl>
+    <p class="note">This is meteorological drought from precipitation alone. SPEI, PDSI and aridity indices also need evaporative demand (temperature or vapour pressure deficit), which this dataset doesn&rsquo;t include. Regions are approximate boxes, area-weighted by cos(latitude).</p>
+  </details>
+  <p class="note" id="credit"></p>
+</div>
+<div class="tip" id="tip"></div>
+
+<script src="vendor/topojson-client.min.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const DATA = "drought_data/prism-1991-2023/";
+const REGIONS = {
+  conus: ["Contiguous US", -125, -66.5, 24, 50],
+  pnw: ["Pacific Northwest", -125, -116.5, 42, 49],
+  cal: ["California & Nevada", -124.5, -114, 32.5, 42],
+  sw: ["Southwest", -115, -103, 31, 37.5],
+  nrock: ["Northern Rockies", -117, -104, 42, 49],
+  nplains: ["Northern Plains", -104, -96, 40, 49],
+  splains: ["Southern Plains", -104, -94, 26, 40],
+  mw: ["Midwest", -97, -82, 36.5, 49],
+  se: ["Southeast", -92, -75, 25, 37],
+  ne: ["Northeast", -80, -67, 38.5, 47.5],
+};
+const CLASSES = [["Abnormally dry", -0.5, -1], ["Moderate", -1, -1.5], ["Severe", -1.5, -2], ["Extreme", -2, -99]];
+const SUM_LABELS = {
+  freq: ["Drought frequency", "% of years", "Share of years with SPI ≤ −1.", "seq-red"],
+  severity: ["Drought severity", "sum of −SPI", "Sum of −SPI over years with SPI ≤ −1 (frequency and depth).", "seq-red"],
+  min_spi: ["Worst SPI", "SPI", "Lowest annual SPI on record.", "div"],
+  worst_year: ["Year of worst SPI", "year", "When the lowest SPI happened.", "seq-blue"],
+  longest_dry: ["Longest dry spell", "years", "Longest run of consecutive years with SPI < 0.", "seq-red"],
+  cv: ["Rainfall variability", "CV %", "Standard deviation as a % of the mean annual total; higher means a less reliable supply.", "seq-blue"],
+};
+const YEAR_CFG = {
+  spi: { kind: "div", c: 0, h: 2.5, f: v => v.toFixed(2), sub: "0 is normal. Red = drier, blue = wetter." },
+  pn: { kind: "div", c: 100, h: 60, f: v => Math.round(v) + "%", sub: "% of the baseline mean; 100% is normal." },
+  z: { kind: "div", c: 0, h: 2.5, f: v => v.toFixed(2), sub: "Standard deviations from the baseline mean." },
+  rai: { kind: "div", c: 0, h: 4, f: v => v.toFixed(2), sub: "van Rooy anomaly index; about ±3 marks the extremes." },
+  decile: { kind: "div", c: 5.5, h: 4.5, f: v => "D" + Math.round(v), sub: "1 = driest tenth of baseline years, 10 = wettest.", ticks: [1, 3, 5.5, 8, 10] },
+  deficit: { kind: "div", c: 0, h: null, f: v => Math.round(v) + " mm", sub: "Millimetres above or below the baseline mean." },
+  dryrun: { kind: "seq-red", min: 0, max: 6, f: v => Math.round(v) + " yr", sub: "Consecutive years with SPI below 0, up to this year." },
+};
+
+// ---- colour ramps (light / dark selected separately) -------------------------------
+const RAMPS = {
+  light: { div: ["#8e1b1f", "#d03b3b", "#ee9b8c", "#f0efec", "#a9c9f2", "#2a78d6", "#0d366b"],
+           "seq-red": ["#fbe3dc", "#ee9b8c", "#d03b3b", "#8e1b1f"], "seq-blue": ["#cde2fb", "#6da7ec", "#2a78d6", "#0d366b"] },
+  dark:  { div: ["#ff7b6f", "#b8403c", "#6b3a37", "#383835", "#35506f", "#2a6fc0", "#7fb4f5"],
+           "seq-red": ["#2e2524", "#7a3a37", "#c8433f", "#ff8a80"], "seq-blue": ["#1d2a3a", "#2a5a9a", "#3987e5", "#a9d0fa"] },
+};
+const dark = () => matchMedia("(prefers-color-scheme: dark)").matches;
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+function lut(kind) {
+  const st = RAMPS[dark() ? "dark" : "light"][kind].map(hex), out = new Uint8Array(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    const p = i / 255 * (st.length - 1), k = Math.min(st.length - 2, Math.floor(p)), f = p - k;
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = Math.round(st[k][c] + (st[k + 1][c] - st[k][c]) * f);
+  }
+  return out;
+}
+const rgb = (L, i) => `rgb(${L[i * 3]},${L[i * 3 + 1]},${L[i * 3 + 2]})`;
+
+// ---- state --------------------------------------------------------------------------
+const S = { meta: null, spi: null, cache: {}, mode: "year", idx: "spi", t: 0, region: "conus", pt: null,
+            weights: null, states: null, playing: false, range: null, cur: null };
+
+function onErr(e) {
+  $("app").innerHTML = `<div class="err">Couldn&rsquo;t load the drought data (${String(e.message || e)}).<br>
+    Build it with <code>python drought_engine.py</code>, then open this page through <code>python serve.py</code>
+    at <code>http://localhost:8000/drought.html</code>.</div>`;
+}
+async function inflate(buf) {                 // data files are gzipped; unzip in the browser
+  const u = new Uint8Array(buf);
+  if (u[0] === 0x1f && u[1] === 0x8b) return new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+  return buf;
+}
+async function getBin(name, Type) {
+  const r = await fetch(DATA + name + ".gz");
+  if (!r.ok) throw new Error(`${name}.gz: HTTP ${r.status}`);
+  return new Type(await inflate(await r.arrayBuffer()));
+}
+async function layer(name) {
+  if (S.cache[name]) return S.cache[name];
+  const m = S.meta;
+  let arr, scale = 1, na;
+  if (S.mode === "sum") arr = await getBin("summary.bin", Float32Array);
+  else {
+    const L = m.layers[name];
+    arr = await getBin(name + ".bin", L.dtype === "i1" ? Int8Array : Int16Array);
+    scale = L.scale; na = L.na;
+  }
+  return (S.cache[name] = { arr, scale, na });
+}
+
+// ---- helpers --------------------------------------------------------------------------
+const N = () => S.meta.rows * S.meta.cols;
+function val(L, t, i) { const x = L.arr[t * N() + i]; return x === L.na || x !== x ? NaN : x / L.scale; }
+function sumVal(L, k, i) { const x = L.arr[k * N() + i]; return x !== x ? NaN : x; }
+function regionIdx() {
+  const m = S.meta, [, x0, x1, y0, y1] = REGIONS[S.region], [b0, b1, b2, b3] = m.bounds;
+  const dx = (b2 - b0) / m.cols, dy = (b3 - b1) / m.rows;
+  return { c0: Math.max(0, Math.floor((x0 - b0) / dx)), c1: Math.min(m.cols - 1, Math.floor((x1 - b0) / dx)),
+           r0: Math.max(0, Math.floor((b3 - y1) / dy)), r1: Math.min(m.rows - 1, Math.floor((b3 - y0) / dy)) };
+}
+function weighted(fnVal, T) {                      // area-weighted regional mean per year
+  const m = S.meta, { c0, c1, r0, r1 } = regionIdx(), out = new Float64Array(T);
+  for (let t = 0; t < T; t++) {
+    let s = 0, w = 0;
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const v = fnVal(t, r * m.cols + c); if (v === v) { s += v * S.weights[r]; w += S.weights[r]; }
+    }
+    out[t] = w ? s / w : NaN;
+  }
+  return out;
+}
+function classShares(T) {                            // [t] -> {cls:[4 exclusive %], drought %}
+  const m = S.meta, { c0, c1, r0, r1 } = regionIdx(), L = S.spiL, res = [];
+  for (let t = 0; t < T; t++) {
+    const acc = [0, 0, 0, 0], tot = { w: 0 };
+    for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++) {
+      const v = val(L, t, r * m.cols + c); if (v !== v) continue;
+      const w = S.weights[r]; tot.w += w;
+      if (v <= -2) acc[3] += w; else if (v <= -1.5) acc[2] += w; else if (v <= -1) acc[1] += w; else if (v <= -0.5) acc[0] += w;
+    }
+    const p = acc.map(a => tot.w ? a / tot.w * 100 : 0);
+    res.push({ p, dr: p[1] + p[2] + p[3] });
+  }
+  return res;
+}
+const nice = (lo, hi) => {
+  const span = hi - lo || 1, step = Math.pow(10, Math.floor(Math.log10(span / 4))), e = span / 4 / step;
+  const s = (e >= 5 ? 5 : e >= 2 ? 2 : 1) * step;
+  return { lo: Math.floor(lo / s) * s, hi: Math.ceil(hi / s) * s, step: s };
+};
+const fix = (v, d = 2) => (Math.abs(v) < 0.005 ? 0 : v).toFixed(d);
+
+function rangeFor(name) {
+  if (S.mode === "sum" && SUM_LABELS[name]) {
+    if (name === "min_spi") return { c: 0, h: 3, kind: "div" };
+    const k = SUM_LABELS[name][3], L = S.cur, vals = [];
+    const k0 = S.meta.summary.indexOf(name);
+    for (let i = 0; i < N(); i += 7) { const v = sumVal(L, k0, i); if (v === v) vals.push(v); }
+    vals.sort((a, b) => a - b);
+    const lo = name === "worst_year" ? vals[0] : 0, hi = name === "longest_dry" ? vals[vals.length - 1] : vals[Math.floor(vals.length * 0.98)];
+    return { kind: k, min: lo, max: Math.max(hi, lo + 1) };
+  }
+  const c = YEAR_CFG[name];
+  if (c.h == null) {                               // deficit: scale to 98th percentile of |departure|
+    const vals = [], L = S.cur;
+    for (let t = 0; t < S.meta.years.length; t += 4) for (let i = 0; i < N(); i += 11) { const v = val(L, t, i); if (v === v) vals.push(Math.abs(v)); }
+    vals.sort((a, b) => a - b); return { kind: "div", c: 0, h: Math.round(vals[Math.floor(vals.length * 0.98)] / 50) * 50 || 100 };
+  }
+  return c.kind === "div" ? { kind: "div", c: c.c, h: c.h } : { kind: c.kind, min: c.min, max: c.max };
+}
+function toColor(R, v) {                              // -> LUT index 0..255
+  if (R.kind === "div") return Math.max(0, Math.min(255, Math.round(((v - R.c) / R.h * 0.5 + 0.5) * 255)));
+  return Math.max(0, Math.min(255, Math.round((v - R.min) / (R.max - R.min) * 255)));
+}
+
+// ---- map ------------------------------------------------------------------------------
+const mapC = $("map"), off = document.createElement("canvas");
+function sizeMap() {
+  const m = S.meta, [b0, b1, b2, b3] = m.bounds, k = Math.cos(((b1 + b3) / 2) * Math.PI / 180);
+  const W = mapC.clientWidth, H = Math.round(W * (b3 - b1) / ((b2 - b0) * k)), d = devicePixelRatio || 1;
+  mapC.style.height = H + "px"; mapC.width = Math.round(W * d); mapC.height = Math.round(H * d);
+}
+function paintMap() {
+  const m = S.meta, L = S.cur, R = S.range, LUT = lut(R.kind), nm = S.idx;
+  off.width = m.cols; off.height = m.rows;
+  const ctx = off.getContext("2d"), img = ctx.createImageData(m.cols, m.rows), px = img.data, n = N();
+  const k0 = S.mode === "sum" ? m.summary.indexOf(nm) : 0;
+  for (let i = 0; i < n; i++) {
+    const v = S.mode === "sum" ? sumVal(L, k0, i) : val(L, S.t, i);
+    if (v !== v) continue;
+    const ci = toColor(R, v) * 3;
+    px[i * 4] = LUT[ci]; px[i * 4 + 1] = LUT[ci + 1]; px[i * 4 + 2] = LUT[ci + 2]; px[i * 4 + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+  const g = mapC.getContext("2d"), W = mapC.width, H = mapC.height;
+  g.clearRect(0, 0, W, H); g.imageSmoothingEnabled = true; g.drawImage(off, 0, 0, W, H);
+  g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--state").trim() || "#888";
+  g.lineWidth = Math.max(1, W / 1200); g.lineJoin = "round";
+  if (S.states) {
+    const [b0, b1, b2, b3] = m.bounds; g.beginPath();
+    for (const ring of S.states) { ring.forEach(([lo, la], j) => { const x = (lo - b0) / (b2 - b0) * W, y = (b3 - la) / (b3 - b1) * H; j ? g.lineTo(x, y) : g.moveTo(x, y); }); }
+    g.stroke();
+  }
+  drawOverlay(g, W, H);
+}
+function drawOverlay(g, W, H) {
+  const m = S.meta, [b0, b1, b2, b3] = m.bounds, ink = getComputedStyle(document.documentElement).getPropertyValue("--ink").trim();
+  const X = lo => (lo - b0) / (b2 - b0) * W, Y = la => (b3 - la) / (b3 - b1) * H;
+  if (S.region !== "conus") {
+    const [, x0, x1, y0, y1] = REGIONS[S.region];
+    g.save(); g.setLineDash([6, 4]); g.strokeStyle = ink; g.lineWidth = Math.max(1.5, W / 700);
+    g.strokeRect(X(x0), Y(y1), X(x1) - X(x0), Y(y0) - Y(y1)); g.restore();
+  }
+  if (S.pt) {
+    const x = (S.pt.c + 0.5) / m.cols * W, y = (S.pt.r + 0.5) / m.rows * H, r = Math.max(5, W / 160);
+    g.beginPath(); g.arc(x, y, r, 0, 7); g.fillStyle = ink; g.fill();
+    g.lineWidth = r / 2.5; g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--surface").trim(); g.stroke();
+  }
+}
+function cellAt(ev) {
+  const b = mapC.getBoundingClientRect(), m = S.meta;
+  const c = Math.floor((ev.clientX - b.left) / b.width * m.cols), r = Math.floor((ev.clientY - b.top) / b.height * m.rows);
+  return c >= 0 && c < m.cols && r >= 0 && r < m.rows ? { c, r } : null;
+}
+function cellVal(cell) {
+  const i = cell.r * S.meta.cols + cell.c;
+  return S.mode === "sum" ? sumVal(S.cur, S.meta.summary.indexOf(S.idx), i) : val(S.cur, S.t, i);
+}
+function latlon(cell) {
+  const [b0, b1, b2, b3] = S.meta.bounds, m = S.meta;
+  return [b3 - (cell.r + 0.5) / m.rows * (b3 - b1), b0 + (cell.c + 0.5) / m.cols * (b2 - b0)];
+}
+const fmtLL = ([la, lo]) => `${Math.abs(la).toFixed(2)}°${la >= 0 ? "N" : "S"}, ${Math.abs(lo).toFixed(2)}°${lo >= 0 ? "E" : "W"}`;
+const fmtVal = v => S.mode === "sum" ? sumFmt(S.idx, v) : YEAR_CFG[S.idx].f(v);
+function sumFmt(n, v) {
+  return n === "freq" ? v.toFixed(0) + "%" : n === "worst_year" ? String(Math.round(v)) : n === "longest_dry" ? Math.round(v) + " yr" : n === "cv" ? v.toFixed(0) + "%" : v.toFixed(2);
+}
+const tip = $("tip");
+function showTip(ev, html) {
+  tip.innerHTML = html; tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  tip.style.left = Math.min(innerWidth - w - 8, ev.clientX + 14) + "px";
+  tip.style.top = Math.min(innerHeight - h - 8, ev.clientY + 14) + "px";
+}
+const hideTip = () => tip.style.display = "none";
+mapC.addEventListener("mousemove", ev => {
+  const cell = S.cur && cellAt(ev); if (!cell) return hideTip();
+  const v = cellVal(cell);
+  showTip(ev, v === v ? `<b>${fmtVal(v)}</b><div class="m">${fmtLL(latlon(cell))}</div>` : `<span class="m">No data</span>`);
+});
+mapC.addEventListener("mouseleave", hideTip);
+mapC.addEventListener("click", ev => { const c = cellAt(ev); if (c && !Number.isNaN(cellVal(c))) { S.pt = c; renderAll(false); } });
+
+// ---- SVG chart helpers -------------------------------------------------------------------
+const svgNS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(svgNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e;
+}
+function frame(svg, H, years, ymin, ymax, step, fmt, W) {
+  svg.innerHTML = ""; svg.setAttribute("viewBox", `0 0 ${W} ${H}`); svg.style.height = H + "px";
+  const P = { l: 40, r: 6, t: 8, b: 22 }, iw = W - P.l - P.r, ih = H - P.t - P.b, T = years.length;
+  const x = i => P.l + (i + 0.5) / T * iw, y = v => P.t + (1 - (v - ymin) / (ymax - ymin)) * ih;
+  for (let v = ymin; v <= ymax + 1e-9; v += step) {
+    el("line", { x1: P.l, x2: W - P.r, y1: y(v), y2: y(v), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    const tx = el("text", { x: P.l - 6, y: y(v) + 4, "text-anchor": "end" }, svg); tx.textContent = fmt(v);
+  }
+  const every = Math.ceil(T / Math.max(3, Math.floor(iw / 44)));
+  years.forEach((yr, i) => { if (i % every === 0) { const tx = el("text", { x: x(i), y: H - 5, "text-anchor": "middle" }, svg); tx.textContent = yr; } });
+  return { P, iw, ih, x, y, T, bw: iw / T };
+}
+function hoverLayer(svg, g, html) {
+  const cross = el("line", { y1: g.P.t, y2: g.P.t + g.ih, stroke: "var(--axis)", "stroke-width": 1, visibility: "hidden" }, svg);
+  for (let i = 0; i < g.T; i++) {
+    const r = el("rect", { x: g.P.l + i * g.bw, y: g.P.t, width: g.bw, height: g.ih, fill: "transparent", style: "cursor:pointer" }, svg);
+    r.addEventListener("mousemove", ev => { cross.setAttribute("x1", g.x(i)); cross.setAttribute("x2", g.x(i)); cross.setAttribute("visibility", "visible"); showTip(ev, html(i)); });
+    r.addEventListener("mouseleave", () => { cross.setAttribute("visibility", "hidden"); hideTip(); });
+    r.addEventListener("click", () => { if (S.mode === "year") { S.t = i; $("yr").value = i; renderAll(false); } });
+  }
+}
+
+function lineChart() {
+  const svg = $("ln"), W = Math.max(280, svg.parentElement.clientWidth - 28), ys = S.meta.years, T = ys.length;
+  const name = S.mode === "year" ? S.idx : "spi", cfg = YEAR_CFG[name], L = name === "spi" ? S.spiL : S.cur;
+  const series = weighted((t, i) => val(L, t, i), T);
+  const lo = Math.min(...series), hi = Math.max(...series), ref = cfg.c;
+  const half = Math.max(Math.abs(lo - ref), Math.abs(hi - ref), cfg.h ? cfg.h * 0.2 : 0.5);
+  const sc = nice(ref - half, ref + half), g = frame(svg, 190, ys, sc.lo, sc.hi, sc.step, v => cfg.f(+v.toFixed(6)).replace(" mm", ""), W);
+  el("line", { x1: g.P.l, x2: W - g.P.r, y1: g.y(ref), y2: g.y(ref), stroke: "var(--axis)", "stroke-width": 1.5 }, svg);
+  const d = Array.from(series).map((v, i) => `${i ? "L" : "M"}${g.x(i).toFixed(1)},${g.y(v).toFixed(1)}`).join("");
+  el("path", { d, fill: "none", stroke: "var(--series)", "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  if (S.mode === "year") el("circle", { cx: g.x(S.t), cy: g.y(series[S.t]), r: 5, fill: "var(--series)", stroke: "var(--surface)", "stroke-width": 2 }, svg);
+  hoverLayer(svg, g, i => `<b>${ys[i]}</b><div class="m">${cfg.f(series[i])} regional mean</div>`);
+  S.lineSeries = series;
+}
+function classChart() {
+  const svg = $("cls"), W = Math.max(280, svg.parentElement.clientWidth - 28), ys = S.meta.years, T = ys.length;
+  const sh = classShares(T), top = Math.max(10, ...sh.map(s => s.p[0] + s.dr)), sc = nice(0, top);
+  const g = frame(svg, 190, ys, 0, sc.hi, sc.step, v => v + "%", W);
+  const cols = ["var(--c1)", "var(--c2)", "var(--c3)", "var(--c4)"];
+  sh.forEach((s, i) => {
+    let base = 0; const bw = Math.max(2, g.bw - 3);
+    s.p.forEach((p, k) => {
+      if (p <= 0) return;
+      const y1 = g.y(base + p), y0 = g.y(base) - (base ? 2 : 0), h = Math.max(0, y0 - y1);
+      el("rect", { x: g.x(i) - bw / 2, y: y1, width: bw, height: h, fill: cols[k], rx: 2,
+                   opacity: S.mode === "year" && i !== S.t ? 0.62 : 1 }, svg);
+      base += p;
+    });
+  });
+  hoverLayer(svg, g, i => `<b>${ys[i]}</b><div class="m">In drought (SPI ≤ −1): ${sh[i].dr.toFixed(1)}%</div>` +
+    CLASSES.map((c, k) => `<div>${c[0]}: ${sh[i].p[k].toFixed(1)}%</div>`).join(""));
+  S.shares = sh;
+}
+function pointChart() {
+  const svg = $("pt"), card = $("pt-card");
+  if (!S.pt) { svg.innerHTML = ""; svg.style.height = "0"; $("pt-t").textContent = "Selected location"; $("pt-s").textContent = "Click the map to chart one cell’s history."; return; }
+  const m = S.meta, i = S.pt.r * m.cols + S.pt.c, ys = m.years, T = ys.length, W = Math.max(280, svg.parentElement.clientWidth - 28);
+  const name = S.mode === "year" ? S.idx : "spi", cfg = YEAR_CFG[name];
+  const doIt = L => {
+    const v = ys.map((_, t) => val(L, t, i));
+    $("pt-t").textContent = `${cfg === YEAR_CFG.spi ? "SPI" : $("idx").selectedOptions[0].textContent} at ${fmtLL(latlon(S.pt))}`;
+    $("pt-s").textContent = "Each bar is one year, coloured on the same scale as the map.";
+    const R = rangeFor(name), LUT = lut(R.kind), ref = cfg.c ?? 0, half = Math.max(...v.map(x => Math.abs(x - ref)), cfg.h ? cfg.h * 0.2 : 0.5);
+    const sc = nice(ref - half, ref + half), g = frame(svg, 170, ys, sc.lo, sc.hi, sc.step, x => cfg.f(+x.toFixed(6)).replace(" mm", ""), W);
+    const bw = Math.max(2, g.bw - 3);
+    v.forEach((x, t) => {
+      if (x !== x) return;
+      const y1 = Math.min(g.y(x), g.y(ref)), h = Math.abs(g.y(x) - g.y(ref));
+      el("rect", { x: g.x(t) - bw / 2, y: y1, width: bw, height: Math.max(1, h), rx: 2, fill: rgb(LUT, toColor(R, x)), opacity: S.mode === "year" && t !== S.t ? 0.7 : 1,
+                   stroke: S.mode === "year" && t === S.t ? "var(--ink)" : "none", "stroke-width": 1.5 }, svg);
+    });
+    el("line", { x1: g.P.l, x2: W - g.P.r, y1: g.y(ref), y2: g.y(ref), stroke: "var(--axis)", "stroke-width": 1.5 }, svg);
+    hoverLayer(svg, g, t => `<b>${ys[t]}</b><div class="m">${cfg.f(v[t])}</div>`);
+  };
+  if (name === "spi") doIt(S.spiL); else if (S.mode === "year") doIt(S.cur);
+}
+
+// ---- panels ------------------------------------------------------------------------------
+function legend() {
+  const R = S.range, LUT = lut(R.kind), n = 12, st = [];
+  for (let k = 0; k < n; k++) st.push(rgb(LUT, Math.round(k / (n - 1) * 255)) + ` ${k / (n - 1) * 100}%`);
+  $("lg-b").style.background = `linear-gradient(90deg, ${st.join(",")})`;
+  const cfg = S.mode === "sum" ? null : YEAR_CFG[S.idx];
+  const f = S.mode === "sum" ? v => sumFmt(S.idx, v) : cfg.f;
+  const lo = R.kind === "div" ? R.c - R.h : R.min, hi = R.kind === "div" ? R.c + R.h : R.max;
+  const vals = R.kind === "div" ? [lo, (lo + R.c) / 2, R.c, (R.c + hi) / 2, hi] : [lo, (lo + hi) / 2, hi];
+  $("lg-t").innerHTML = vals.map((v, i) => `<span style="left:${(v - lo) / (hi - lo) * 100}%">${i === 0 && R.kind === "div" ? "≤ " : ""}${f(S.idx === "decile" ? Math.round(v) : +v.toFixed(2))}${i === vals.length - 1 && R.kind === "div" ? " ≥" : ""}</span>`).join("");
+  $("lg-n").textContent = S.mode === "sum" ? SUM_LABELS[S.idx][1] : (S.meta.layers[S.idx].label + (S.meta.layers[S.idx].unit ? ", " + S.meta.layers[S.idx].unit : ""));
+}
+function kpis() {
+  const ys = S.meta.years, T = ys.length, sh = S.shares, mean = weighted((t, i) => val(S.spiL, t, i), T);
+  const t = S.mode === "year" ? S.t : null, reg = REGIONS[S.region][0];
+  if (t == null) {
+    const avg = sh.reduce((a, s) => a + s.dr, 0) / T;
+    $("k1").textContent = avg.toFixed(1) + "%"; $("k1d").textContent = `average per year, ${reg}`;
+    $("k2l").textContent = "Mean SPI"; $("k2").textContent = fix(mean.reduce((a, b) => a + b, 0) / T); $("k2d").textContent = "all years";
+  } else {
+    const dr = sh[t].dr, d = t ? dr - sh[t - 1].dr : null;
+    $("k1").textContent = dr.toFixed(1) + "%";
+    $("k1d").textContent = d == null ? ys[t] : `${d >= 0 ? "▲" : "▼"} ${Math.abs(d).toFixed(1)} pts vs ${ys[t - 1]}`;
+    $("k2l").textContent = "Mean SPI"; $("k2").textContent = fix(mean[t]); $("k2d").textContent = `${ys[t]}, ${reg}`;
+  }
+  let w = 0; mean.forEach((v, i) => { if (v < mean[w]) w = i; });
+  $("k3").textContent = ys[w]; $("k3d").textContent = `mean SPI ${fix(mean[w])}, ${sh[w].dr.toFixed(0)}% of area in drought`;
+  $("ln-t").textContent = (S.mode === "year" ? $("idx").selectedOptions[0].textContent : "SPI") + ": regional mean by year";
+  $("ln-s").textContent = `${reg}, area-weighted. ${S.mode === "year" ? "Click a year to move the map." : "Summaries cover every year; this shows SPI."}`;
+}
+function table() {
+  const ys = S.meta.years, T = ys.length, mean = weighted((t, i) => val(S.spiL, t, i), T), sh = S.shares;
+  const name = S.mode === "year" ? S.idx : null, ser = name && name !== "spi" ? weighted((t, i) => val(S.cur, t, i), T) : null;
+  const head = ["Year", ...(ser ? [$("idx").selectedOptions[0].textContent + " (mean)"] : []), "Mean SPI", "Abn. dry %", "Moderate %", "Severe %", "Extreme %", "In drought %"];
+  $("tbl").innerHTML = `<thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>` +
+    ys.map((y, t) => `<tr><td>${y}</td>${ser ? `<td>${YEAR_CFG[name].f(ser[t])}</td>` : ""}<td>${fix(mean[t])}</td>` +
+      sh[t].p.map(p => `<td>${p.toFixed(1)}</td>`).join("") + `<td>${sh[t].dr.toFixed(1)}</td></tr>`).join("") + "</tbody>";
+}
+function titles() {
+  if (S.mode === "sum") {
+    $("map-t").textContent = SUM_LABELS[S.idx][0] + `, ${S.meta.years[0]}–${S.meta.years.at(-1)}`; $("map-s").textContent = SUM_LABELS[S.idx][2];
+  } else {
+    $("map-t").textContent = `${S.meta.layers[S.idx].label}, ${S.meta.years[S.t]}`; $("map-s").textContent = YEAR_CFG[S.idx].sub;
+  }
+  $("yearbar").style.display = S.mode === "year" ? "flex" : "none";
+  $("yrv").textContent = S.meta.years[S.t];
+}
+async function renderAll(reload = true) {
+  if (reload) {
+    S.cur = S.mode === "sum" ? await layer("summary") : await layer(S.idx);
+    S.range = rangeFor(S.idx);
+  }
+  titles(); paintMap(); legend(); lineChart(); classChart(); kpis(); pointChart(); table();
+}
+
+// ---- wiring --------------------------------------------------------------------------------
+function fillIdx() {
+  const sel = $("idx"); sel.innerHTML = "";
+  const items = S.mode === "year" ? Object.keys(S.meta.layers).map(k => [k, S.meta.layers[k].label]) : S.meta.summary.map(k => [k, SUM_LABELS[k][0]]);
+  items.forEach(([k, l]) => sel.add(new Option(l, k)));
+  S.idx = items[0][0]; sel.value = S.idx;
+}
+function setMode(mode) {
+  S.mode = mode; $("t-year").setAttribute("aria-pressed", mode === "year"); $("t-sum").setAttribute("aria-pressed", mode === "sum");
+  if (mode === "sum") { S.cache.summary = null; } stopPlay(); fillIdx(); renderAll();
+}
+function stopPlay() { S.playing = false; $("play").innerHTML = "&#9654;"; }
+$("t-year").onclick = () => setMode("year"); $("t-sum").onclick = () => setMode("sum");
+$("idx").onchange = e => { S.idx = e.target.value; renderAll(); };
+$("reg").onchange = e => { S.region = e.target.value; renderAll(false); };
+$("yr").oninput = e => { S.t = +e.target.value; renderAll(false); };
+$("play").onclick = () => {
+  if (S.playing) return stopPlay();
+  S.playing = true; $("play").innerHTML = "&#10074;&#10074;";
+  const step = () => {
+    if (!S.playing) return;
+    S.t = (S.t + 1) % S.meta.years.length; $("yr").value = S.t; renderAll(false); setTimeout(step, 700);
+  };
+  setTimeout(step, 300);
+};
+let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => { if (S.meta) { sizeMap(); renderAll(false); } }, 120); });
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => S.meta && renderAll(false));
+
+(async function boot() {
+  try {
+    S.meta = await (await fetch(DATA + "meta.json")).json();
+    const m = S.meta; S.weights = new Float64Array(m.rows);
+    for (let r = 0; r < m.rows; r++) S.weights[r] = Math.cos((m.bounds[3] - (r + 0.5) / m.rows * (m.bounds[3] - m.bounds[1])) * Math.PI / 180);
+    S.spiL = await layer("spi");
+    for (const k in REGIONS) $("reg").add(new Option(REGIONS[k][0], k));
+    $("yr").max = m.years.length - 1; S.t = m.years.length - 1; $("yr").value = S.t;
+    $("base").textContent = `${m.baseline[0]}–${m.baseline[1]}`;
+    $("credit").textContent = "Data: " + m.credit;
+    $("cls-key").innerHTML = CLASSES.map((c, k) => `<span><i style="background:var(--c${k + 1})"></i>${c[0]} (${["−0.5 to −1", "−1 to −1.5", "−1.5 to −2", "≤ −2"][k]})</span>`).join("");
+    fillIdx(); sizeMap();
+    await renderAll();
+    try {                                       // state outlines are optional
+      const topo = await (await fetch("vendor/states-10m.json")).json();
+      const mesh = topojson.mesh(topo, topo.objects.states, (a, b) => a !== b), rings = [];
+      for (const line of mesh.coordinates) rings.push(line);
+      S.states = rings; paintMap();
+    } catch (e) { /* offline: map works without outlines */ }
+  } catch (e) { onErr(e); }
+})();
+</script>
+</body>
+</html>
