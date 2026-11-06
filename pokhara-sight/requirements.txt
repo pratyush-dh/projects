@@ -1,0 +1,8 @@
+numpy
+scipy
+rasterio
+pyproj
+matplotlib
+pillow
+imageio-ffmpeg
+# GDAL python bindings (conda-forge: gdal) are also needed, only for the DEM download

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sight: giants in view from Pokhara</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="A 360-degree line-of-sight sweep from seven Pokhara viewpoints to nine Himalayan giants, from a 30 m Copernicus surface model.">
+<style>
+  :root {
+    --ink: #050b14;
+    --panel: #0c1624;
+    --line: rgba(190, 215, 230, 0.16);
+    --text: #d8e4ec;
+    --dim: #8aa0b0;
+    --accent: #25c7ff;
+    font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--ink); color: var(--text); }
+  body { line-height: 1.55; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 28px 16px 64px; }
+  h1 { font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.2; margin: 0 0 6px; color: #fff; }
+  h2 { font-size: 1.15rem; margin: 40px 0 10px; color: #fff; }
+  .sub { color: var(--accent); margin: 0 0 20px; }
+  a { color: var(--accent); }
+  video, .fig { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 10px; background: #000; }
+  .cap { color: var(--dim); font-size: 0.85rem; margin: 8px 0 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 0.93rem; margin-top: 8px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--dim); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: .04em; }
+  td.n { color: var(--accent); font-weight: 700; white-space: nowrap; }
+  td.h { white-space: nowrap; color: var(--dim); }
+  .grid2 { display: grid; grid-template-columns: 1fr; gap: 20px; }
+  @media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+  ul { padding-left: 1.2rem; }
+  li { margin: 6px 0; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+  footer { margin-top: 48px; color: var(--dim); font-size: 0.82rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>How many Himalayan giants can you see from Pokhara&rsquo;s viewpoints?</h1>
+  <p class="sub">A 360&deg; sweep from seven viewpoints in the Pokhara valley, Nepal &mdash; #30DayMapChallenge 2026, Day 5: Sight</p>
+
+  <video src="media/sight-grid.mp4" poster="media/sight-grid-poster.png" controls autoplay muted loop playsinline preload="metadata"></video>
+  <p class="cap">Each panel: a 75 km circle round the viewpoint, with a sweep line that lights up the ground in line of sight (cool = near, warm = far), and the panorama in the current heading with the nine giants marked (filled = visible, hollow = hidden). Panorama vertical scale exaggerated.</p>
+
+  <h2>Giants in line of sight</h2>
+  <table>
+    <thead><tr><th>Viewpoint</th><th>DEM height</th><th>Giants</th><th>Not in view</th></tr></thead>
+    <tbody>
+      <tr><td>Kahun Danda</td><td class="h">1,442 m</td><td class="n">8 of 9</td><td>Annapurna III</td></tr>
+      <tr><td>Pumdikot</td><td class="h">1,351 m</td><td class="n">8 of 9</td><td>Gangapurna</td></tr>
+      <tr><td>World Peace Pagoda</td><td class="h">1,128 m</td><td class="n">7 of 9</td><td>Annapurna III, Gangapurna</td></tr>
+      <tr><td>Kaskikot</td><td class="h">1,739 m</td><td class="n">7 of 9</td><td>Annapurna I, Gangapurna</td></tr>
+      <tr><td>Lakeside (Phewa)</td><td class="h">805 m</td><td class="n">7 of 9</td><td>Annapurna III, Gangapurna</td></tr>
+      <tr><td>Sarangkot</td><td class="h">1,577 m</td><td class="n">6 of 9</td><td>Annapurna III, Gangapurna, Manaslu</td></tr>
+      <tr><td>Naudanda</td><td class="h">1,497 m</td><td class="n">6 of 9</td><td>Dhaulagiri I, Annapurna III, Gangapurna</td></tr>
+    </tbody>
+  </table>
+  <p class="cap">The nine: Dhaulagiri I, Annapurna I, II, III, IV and South, Machhapuchhre, Gangapurna, Manaslu. Counts are geometric line of sight and can be &plusmn;1 for grazing lines (Annapurna II).</p>
+
+  <h2>Across the valley</h2>
+  <div class="grid2">
+    <div>
+      <img class="fig" src="media/overview-map.png" alt="Map of the number of giants in line of sight from each cell of the Pokhara valley" loading="lazy">
+      <p class="cap">Giants in line of sight from every cell. The flat valley floor has a median of 7 in sight and some cells see all nine; about 58% of the window sees at least one.</p>
+    </div>
+    <div>
+      <img class="fig" src="media/panoramas.png" alt="Horizon panoramas from the seven viewpoints" loading="lazy">
+      <p class="cap">Horizon panoramas from the seven viewpoints, coloured by distance to the skyline.</p>
+    </div>
+  </div>
+
+  <h2>How it works</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Data:</strong> Copernicus GLO-30 surface model (30 m, includes canopy and buildings), warped to UTM 44N.</li>
+      <li><strong>Line of sight:</strong> terrain sampled along the straight path to each summit, with earth curvature and refraction (coefficient 0.85714); 2&nbsp;m eye height.</li>
+      <li><strong>Sweep and panorama:</strong> a radial horizon sweep (0.075&deg; azimuth steps, 40&nbsp;m samples, 75&nbsp;km). A cell is visible if its elevation angle is at least the running maximum of everything nearer. The panorama is the same data.</li>
+      <li><strong>Checks:</strong> every summit and viewpoint is snapped to the highest DEM cell nearby and its height checked against the published height; failures are skipped, not plotted.</li>
+      <li><strong>Why not <code>gdal_viewshed</code>:</strong> its result was not reciprocal for grazing lines, so the test is done explicitly.</li>
+    </ul>
+  </div>
+
+  <h2>Read this before quoting a number</h2>
+  <div class="card">
+    <ul>
+      <li>Geometric only: no haze, cloud or atmospheric extinction. &ldquo;Could you see it&rdquo;, not &ldquo;will you&rdquo;.</li>
+      <li>Annapurna II is a marginal line (about 35&nbsp;km, behind Annapurna IV); a 0.1&nbsp;m DEM difference flipped it at two viewpoints.</li>
+      <li>A surface model includes canopy and buildings, and resampling lowers sharp summits by 50&ndash;130&nbsp;m, which biases slightly toward &ldquo;hidden&rdquo;.</li>
+      <li>Viewpoint coordinates are Google Maps pins or tourism and Wikipedia listings, snapped to the ridge top and checked against published heights.</li>
+    </ul>
+  </div>
+
+  <p style="margin-top:24px">
+    <a href="https://github.com/pratyush-dh/projects/tree/main/pokhara-sight">Code, data and method on GitHub</a>
+    &middot; <a href="media/sight-grid.mp4">Download the animation (MP4)</a>
+  </p>
+
+  <footer>
+    Contains modified Copernicus DEM GLO-30 data &copy; DLR e.V. 2010&ndash;2014 and &copy; Airbus Defence and Space GmbH 2014&ndash;2018, provided under COPERNICUS by the European Union and ESA. The sweep-plus-panorama layout is inspired by
+    <a href="https://www.linkedin.com/posts/saraaharon_30daymapchallenge-day5-sight-ugcPost-7524002632420634624-K4tg">Sara Aharon&rsquo;s Day 5 entry</a> (Moldoveanu Peak, Romania); the code, data and results here are my own.
+  </footer>
+</div>
+</body>
+</html>
